@@ -31,6 +31,18 @@ foreach ($marker in $requiredMarkers) {
     }
 }
 
+$unsupportedSilentMarkers = @(
+    'WizardSilent',
+    'SuppressibleMsgBox',
+    '/SILENT',
+    '/VERYSILENT'
+)
+foreach ($marker in $unsupportedSilentMarkers) {
+    if ($source.Contains($marker)) {
+        throw "安装脚本不应包含静默安装分支：$marker"
+    }
+}
+
 $sourceFiles = [regex]::Matches($source, 'Source:\s+"([^"]+)";') |
     ForEach-Object { $_.Groups[1].Value }
 $backupFiles = [regex]::Matches($source, "BackupPackageFile\('([^']+)'\)") |

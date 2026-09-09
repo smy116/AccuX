@@ -145,8 +145,7 @@ var
 procedure ReportInstallError(const MessageText: String);
 begin
   Log(MessageText);
-  if not WizardSilent then
-    SuppressibleMsgBox(MessageText, mbCriticalError, MB_OK, IDOK);
+  MsgBox(MessageText, mbCriticalError, MB_OK);
 end;
 
 procedure FailInstall(const MessageText: String);
@@ -262,7 +261,7 @@ begin
   end;
 end;
 
-{ 下载并静默安装 .NET Framework 4.8。返回 True 表示已就绪或已交由重启完成。 }
+{ 下载并安装 .NET Framework 4.8。返回 True 表示已就绪或已交由重启完成。 }
 function InstallDotNet48(): Boolean;
 var
   InstallerPath: String;
@@ -300,8 +299,8 @@ begin
     Exit;
   end;
 
-  if not Exec(InstallerPath, '/q /norestart /ChainingPackage AccuX', '',
-      SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  if not Exec(InstallerPath, '/norestart /ChainingPackage AccuX', '',
+      SW_SHOW, ewWaitUntilTerminated, ResultCode) then
   begin
     PrerequisiteError := '无法启动 .NET Framework 4.8 安装程序：' + SysErrorMessage(ResultCode);
     Exit;
@@ -310,18 +309,16 @@ begin
   Result := HandleDotNet48ExitCode(ResultCode);
 end;
 
-{ 前置条件集中在 PrepareToInstall：交互/静默安装共用失败与重启出口。 }
+{ 前置条件集中在 PrepareToInstall，统一由常规安装向导处理。 }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   NeedsRestart := False;
   if not DotNet48RebootRequired and not IsDotNet48OrLater() then
   begin
-    if WizardSilent then
-      Result := '静默安装要求预先安装 .NET Framework 4.8 或更高版本。请部署该前置条件后重试。'
-    else if SuppressibleMsgBox('AccuX 需要 .NET Framework 4.8 或更高版本，当前系统未检测到。' + #13#10#13#10 +
+    if MsgBox('AccuX 需要 .NET Framework 4.8 或更高版本，当前系统未检测到。' + #13#10#13#10 +
         '是否立即联网下载并安装？（引导程序约 1.5 MB，后续仍需下载运行时组件）',
-        mbConfirmation, MB_YESNO, IDNO) = IDNO then
+        mbConfirmation, MB_YESNO) = IDNO then
       Result := '未安装 .NET Framework 4.8，无法继续安装 AccuX。'
     else if not InstallDotNet48() then
       Result := PrerequisiteError;
