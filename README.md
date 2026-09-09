@@ -1,0 +1,225 @@
+# AccuX V1
+
+面向财务人员的 Windows Excel / WPS 表格效率插件（COM Add-in）。
+
+V1 现包含四个财务功能和一个工作簿目录功能：
+
+1. **一键舍入** — 对选区金额统一四舍五入，每次点击弹出小数位窗口（默认 2 位）。
+2. **金额折合** — 按除百 / 除千 / 除万折合选区金额，可选添加“万”字。
+3. **选区求和** — 汇总选区内可见数字，四舍五入到 2 位并复制到剪切板。
+4. **金额大写** — 将选区金额转换为中文大写，原地覆盖选区。
+5. **生成目录** — 在工作簿最前面生成可见工作表目录，并为名称创建内部超链接。
+
+核心目标不是功能数量，而是建立稳定、可扩展的基础架构：Excel/WPS 宿主差异层、明确的 Core/Host 单向依赖、统一 Range 操作管线、正确的数值/公式区分、模块内聚的业务算法。
+
+## 环境要求
+
+| 项 | 要求 |
+| --- | --- |
+| 操作系统 | Windows 10 / 11 |
+| 运行时 | .NET Framework 4.8 |
+| 宿主 | Microsoft Excel（已验证环境：Office 16 x64）或 WPS 表格 |
+| 构建 | Visual Studio 2022 或 .NET SDK 9（含 MSBuild） |
+
+## 解决方案结构
+
+```
+AccuX.sln
+├─ Directory.Build.props        # net48 / C# 9 / 公共属性
+├─ build.ps1                    # 还原 + 构建 + 测试 + 依赖边界校验
+├─ src/
+│  ├─ AccuX.Core                # 模块契约、命令分发、单元格分类、Range 管线、配置、日志
+│  ├─ AccuX.Host                # Excel/WPS 差异适配、批量读写、公式规范化、宿主状态
+│  ├─ AccuX.Modules.BasicFinance# 基础功能 + 纯 C# 算法 + WPF 界面
+│  └─ AccuX.AddIn               # COM 入口、Ribbon、组合根、显式模块注册、图标
+├─ tests/
+│  ├─ AccuX.Core.Tests
+│  └─ AccuX.Modules.BasicFinance.Tests
+├─ tools/                       # register / unregister / make-icons
+├─ installer/AccuX.iss          # Inno Setup 安装工程
+└─ docs/CompatibilityMatrix.md  # 兼容性矩阵
+```
+
+### 依赖方向（编码强制规则）
+
+```
+AccuX.Core  ── 不引用 Host，不引用 Excel/WPS Interop
+AccuX.Host  ── 引用 Core，实现 IRangeOperationHost / IHostStateScope
+AccuX.Modules.*  ── 引用 Core，不直接解决宿主差异
+AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
+```
+
+`build.ps1` 会在每次构建后反射校验：`AccuX.Core` 不得引用任何 Interop / Office / WPS 程序集，也不得引用 `AccuX.Host`。
+
+## 构建与测试
+
+```powershell
+# 一条命令完成还原、构建、测试、边界校验
+powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 或手动
+dotnet build AccuX.sln -c Debug
+dotnet test AccuX.sln -c Debug
+```
+
+当前状态：解决方案编译 0 警告 0 错误；单元测试 **139 项全部通过**（Core 54 项，BasicFinance 85 项）。
+
+## 开发期注册与 F5 调试
+
+AccuX 是 COM Add-in，必须先注册才能被 Excel 加载。
+
+```powershell
+# 注册（HKCU，无需管理员）
+powershell -ExecutionPolicy Bypass -File tools\register.ps1
+
+# 注销
+powershell -ExecutionPolicy Bypass -File tools\unregister.ps1
+```
+
+注册脚本使用 `RegAsm /regfile` 生成注册表脚本，改写为当前用户根键后导入（真正的 HKCU 注册，无需管理员），并在以下位置写入 `LoadBehavior=3`（子键名必须是 ProgId）：
+
+```
+HKCU\Software\Microsoft\Office\Excel\Addins\AccuX.AddIn.Connect
+HKCU\Software\Kingsoft\Office\ET\AddinsWL\AccuX.AddIn.Connect
+```
+
+已验证：注册后 `Type.GetTypeFromProgID('AccuX.AddIn.Connect')` 可解析并实例化，`GetCustomUI` 返回正确 Ribbon XML，五个图标均可转换为 `IPictureDisp`。
+
+> `RegAsm` 会对未签名的程序集给出 `/codebase` 警告（RA0000）。开发期可忽略；正式发布建议为程序集添加强名称（强名称对 COM 注册与加载更稳妥）。
+
+### Visual Studio F5 调试
+
+`AccuX.AddIn` 是类库（COM Add-in 的正确输出类型），不能“直接启动”。启动目标通过
+`src/AccuX.AddIn/Properties/launchSettings.json` 中的 **Excel** 配置文件指定：
+
+```json
+{
+  "profiles": {
+    "Excel": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+    }
+  }
+}
+```
+
+步骤：
+
+1. 先执行一次 `tools\register.ps1`。
+2. 在“解决方案资源管理器”中右键 **AccuX.AddIn → 设为启动项目**。
+3. 在工具栏的调试目标下拉框中选择 **Excel** 配置文件（若下拉框为空，重新打开解决方案即可刷新）。
+4. 按 **F5**，Visual Studio 启动 Excel 并自动附加调试器。
+
+> 如果 Excel 不在上述路径，直接修改 `executablePath`（例如 `C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE`）。
+> 也可以在 **项目属性 → 调试 → 打开调试启动配置文件 UI** 中修改，效果等价。
+
+可命中以下断点：`Connect.OnConnection` → `AddInCompositionRoot.Start` → Ribbon callback → `CommandDispatcher.Execute` → `RangeOperationPipeline.Execute` → `ExcelRangeOperationHost.Read/Write` → 业务 Transform。
+
+> Clean / Rebuild 后程序集路径不变，无需重新注册；若更换输出目录或改为 Release，重新运行注册脚本即可。
+
+#### 常见问题：无法直接启动带有“类库输出类型”的项目
+
+该错误表示 VS 找不到启动目标，不是项目配置错误。按上述步骤选择 **Excel** 启动配置文件即可。
+SDK 风格项目的启动目标只由 `launchSettings.json` 决定（CPS 项目系统不支持旧的
+`StartAction` / `StartProgram` 项目属性）。
+
+### WPS 调试
+
+WPS 与 Excel 共用同一套程序集与核心代码。本机未安装 WPS，因此：
+
+- 若 WPS 可作为 Visual Studio 外部启动程序，按上述方式配置；
+- 否则先启动 WPS，再使用 **调试 → 附加到进程** 附加到 WPS 表格进程。
+
+WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需在装有 WPS 的机器上补齐。
+
+## 配置
+
+配置文件路径：`%AppData%\AccuX\config.json`。文件不存在时使用默认值，不会报错。
+
+```json
+{
+  "basicFinance": {
+    "roundDigits": 2,
+    "largeSelectionWarning": 100000,
+    "maxProcessCells": 500000
+  }
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `roundDigits` | 一键舍入窗口的预填小数位（默认 2，窗口内仍可修改） |
+| `largeSelectionWarning` | 选区超过该单元格数时弹出确认提示 |
+| `maxProcessCells` | 选区超过该单元格数时直接拒绝处理 |
+
+样例文件位于 `src/AccuX.AddIn/config.sample.json`。
+
+> 阈值默认值需通过 Excel/WPS 实测 benchmark 最终确定，当前为配置结构示例。
+
+## 日志
+
+默认目录：`%AppData%\AccuX\logs\accux-yyyyMMdd.log`。
+
+按规格 §22 记录：AccuX 版本、宿主类型与版本、模块、命令、工作表、Range 地址、单元格数、耗时、结果、异常。
+
+**不记录**真实财务金额、公式内容或工作表敏感数据。
+
+## 数据安全策略
+
+- **fail before write**：写回前完成全部读取、分类、业务计算与完整 WritePlan 生成；任一步失败即不写回。
+- **数值进数值出，公式进公式出**：公式保持公式属性，不替换为固定值。
+- 无法安全转换的公式（数组公式、动态数组等）默认跳过并计入结果统计。
+- **隐藏行/列默认跳过**：Host 读取并标记隐藏状态，修改型功能由公共操作管线统一跳过，选区求和不计入隐藏单元格；结果统计会显示跳过数量。
+- 一次 Command 只从当前 Selection 捕获一次 `RangeTarget`；后续读写与验证都针对同一 Target，不重新读取 Selection。
+- 批量整块读写，禁止逐 Cell COM 操作。
+- V1 不提供 Snapshot、AccuX Undo 或事务级回滚；宿主状态（`ScreenUpdating` 等）在异常时仍会恢复。
+
+## 数据处理规则（V1 固定行为）
+
+| 数据类型 | 一键舍入 | 金额折合 | 选区求和 | 金额大写 |
+| --- | --- | --- | --- | --- |
+| 普通数值 | 修改数值 | 修改数值 | 计入合计 | 输出大写 |
+| 普通公式 | 修改公式 | 修改公式 | 计入合计 | 输出大写 |
+| 文本 / 公式文本 | 跳过 | 跳过 | 跳过 | 跳过 |
+| Date / FormulaDate | 跳过 | 跳过 | 跳过 | 跳过 |
+| Boolean / FormulaBoolean | 跳过 | 跳过 | 跳过 | 跳过 |
+| 空白 | 跳过 | 跳过 | 跳过 | 跳过 |
+| Error / FormulaError | 跳过 | 跳过 | 跳过 | 跳过 |
+| 复杂公式 | 修改公式 | 修改公式 | 计入数字结果 | 输出大写 |
+| 不支持类型 | 跳过 | 跳过 | 跳过 | 跳过 |
+
+> 隐藏行/列是与数据类型独立的公共规则：选区总单元格数仍按完整矩形计算，但隐藏行/列中的单元格不会进入四个财务功能的处理；选区求和只复制格式化后的合计数字。
+
+## 安装包（正式发布）
+
+使用 Inno Setup 编译 `installer/AccuX.iss`：
+
+```
+ISCC.exe installer\AccuX.iss
+```
+
+脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。
+
+> 本机未安装 Inno Setup，因此安装工程已交付但**尚未编译验证**。编译前请先以 `Release` 配置构建解决方案，使 `src\*\bin\Release\net48\` 下存在所需程序集。
+
+## 人工验证清单
+
+以下项目需要真实宿主，请按 `docs/CompatibilityMatrix.md` 逐项验证并回填结果：
+
+1. 注册后打开 Excel，确认出现 **AccuX → 基础财务** 选项卡及五个图标。
+2. 选中普通数值区域，执行一键舍入 / 金额折合 / 选区求和 / 金额大写。
+3. 选中普通公式区域，确认公式被包裹（`ROUND` / `*÷`），**未变成固定值**。
+4. 选中混合区域（数值 + 文本 + 日期 + 布尔 + 空白 + 错误），确认只处理金额且结果统计正确。
+5. 选中区域后先点击按钮，在参数窗口打开期间切换工作表，确认仍只写回原 Target。
+6. 在选区内隐藏行或列，确认修改型功能不写入隐藏单元格，选区求和不计入隐藏数字。
+7. 选区超过 `maxProcessCells` 时确认被拒绝；超过 `largeSelectionWarning` 时确认弹出确认框。
+8. 选区求和后确认剪切板内容为千分位、固定 2 位小数，且提示框在复制成功后出现。
+9. 在装有 WPS 的机器上重复以上关键链路，回填 WPS 行。
+10. 在包含可见、隐藏和非常隐藏工作表的工作簿中执行“生成目录”，确认仅列出可见工作表、目录位于首位且名称可跳转。
+
+## 已知限制（V1）
+
+- 不实现 Snapshot / AccuX Undo / 事务回滚。
+- 不实现超大 Range 分块边读边写；超过 `maxProcessCells` 直接拒绝。
+- 不做动态插件发现、热加载或复杂依赖解析；`BasicFinance` 由 AddIn 显式注册。
+- WPS 与 Inno Setup 尚未在本机验证。

@@ -1,0 +1,56 @@
+<Window x:Class="AccuX.Modules.BasicFinance.AmountConversion.AmountConversionView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="金额折合"
+        Width="360"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="折合方式" Margin="0,0,0,6" />
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="90,0,0,12">
+            <RadioButton Content="除以折合率" IsChecked="{Binding IsDivide}" Margin="0,0,16,0" />
+            <RadioButton Content="乘以折合率" IsChecked="{Binding IsMultiply}" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="1" Text="折合率" VerticalAlignment="Center" />
+        <ComboBox Grid.Row="1"
+                  Margin="90,0,0,12"
+                  Width="180"
+                  HorizontalAlignment="Left"
+                  ItemsSource="{Binding Presets}"
+                  DisplayMemberPath="Name"
+                  SelectedValuePath="Rate"
+                  SelectedValue="{Binding Rate}" />
+
+        <TextBlock Grid.Row="2" Text="小数位" VerticalAlignment="Center" />
+        <TextBox Grid.Row="2"
+                 Margin="90,0,0,12"
+                 Width="80"
+                 HorizontalAlignment="Left"
+                 Text="{Binding Digits, UpdateSourceTrigger=PropertyChanged}" />
+
+        <CheckBox Grid.Row="3"
+                  Content="结果添加“万”字（写为文本）"
+                  IsChecked="{Binding AppendWanSuffix}"
+                  Margin="90,0,0,12" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <TextBlock Text="{Binding ValidationMessage}"
+                       Foreground="Red"
+                       VerticalAlignment="Center"
+                       Margin="0,0,12,0" />
+            <Button Content="确定" Width="72" Height="26" IsDefault="True" Click="OnOk" Margin="0,0,8,0" />
+            <Button Content="取消" Width="72" Height="26" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+</Window>

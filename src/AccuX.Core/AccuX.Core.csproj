@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AccuX.Core</RootNamespace>
+    <AssemblyName>AccuX.Core</AssemblyName>
+    <Description>AccuX 插件公共核心：模块契约、命令分发、单元格分类、Range 操作管线、配置与日志。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Security" />
+  </ItemGroup>
+
+</Project>

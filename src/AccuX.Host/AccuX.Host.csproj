@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AccuX.Host</RootNamespace>
+    <AssemblyName>AccuX.Host</AssemblyName>
+    <Description>Excel / WPS 宿主差异适配层：实现 Core 宿主接口，负责批量读写、公式规范化与宿主状态管理。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AccuX.Core\AccuX.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AccuX.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      使用本机 GAC 中的 Office PIA（15.0.0.0）并随程序集一起部署（Private=true）。
+      不引用 NuGet 的 16.x PIA：它强依赖 office.dll / Microsoft.Vbe.Interop 16.0，
+      而这些程序集在多数 Click-to-Run 环境中不在 GAC 内，会导致运行时 FileNotFound。
+      15.0 PIA 的接口 IID 与 Excel 16 宿主一致，基础对象模型调用完全兼容。
+      详见 docs/CompatibilityMatrix.md。
+    -->
+    <Reference Include="Microsoft.Office.Interop.Excel">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Excel\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Excel.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="office">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\office.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Vbe.Interop">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

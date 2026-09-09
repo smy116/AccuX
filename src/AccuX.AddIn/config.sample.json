@@ -1,0 +1,7 @@
+{
+  "basicFinance": {
+    "roundDigits": 2,
+    "largeSelectionWarning": 100000,
+    "maxProcessCells": 500000
+  }
+}

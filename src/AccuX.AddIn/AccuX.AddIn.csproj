@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AccuX.AddIn</RootNamespace>
+    <AssemblyName>AccuX.AddIn</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <Description>AccuX COM Add-in：生命周期、Ribbon、组合根与显式模块注册。</Description>
+
+    <!-- COM 注册信息（开发期由 tools/register.ps1 使用 RegAsm 注册，安装包由 Inno Setup 调用同一逻辑）。 -->
+    <AssemblyTitle>AccuX Add-in</AssemblyTitle>
+    <EnableComHosting>false</EnableComHosting>
+    <RegisterForComInterop>false</RegisterForComInterop>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AccuX.Core\AccuX.Core.csproj" />
+    <ProjectReference Include="..\AccuX.Host\AccuX.Host.csproj" />
+    <ProjectReference Include="..\AccuX.Modules.BasicFinance\AccuX.Modules.BasicFinance.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.Office.Interop.Excel">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Excel\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Excel.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="office">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\office.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Vbe.Interop">
+      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Ribbon\**" />
+    <EmbeddedResource Include="Ribbon\AccuXRibbon.xml" />
+    <None Remove="Resources\**" />
+    <EmbeddedResource Include="Resources\**\*.png" />
+  </ItemGroup>
+
+</Project>
