@@ -27,6 +27,9 @@ namespace AccuX.Core.Modules
         /// <summary>由 Host 实现的传统单元格批注操作能力。</summary>
         ICellCommentHost CellCommentHost { get; }
 
+        /// <summary>由 Host 实现的当前选区可见单元格标记能力。</summary>
+        ICellMarkHost CellMarkHost { get; }
+
         /// <summary>AccuX 版本号，用于日志与提示。</summary>
         string AccuXVersion { get; }
     }

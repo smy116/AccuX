@@ -47,6 +47,42 @@
                   screentip="批注助手"
                   supertip="查看、保存或删除当前选区左上角单元格的批注。" />
         </group>
+        <group id="AccuXMarkGroup" label="标记">
+          <box id="AccuXMarkLayout" boxStyle="vertical">
+            <box id="AccuXMarkTopRow" boxStyle="horizontal">
+              <button id="accux.mark.green"
+                      label="标绿"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="标绿"
+                      supertip="将当前选区中的可见单元格底色设置为绿色。" />
+              <button id="accux.mark.red"
+                      label="标红"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="标红"
+                      supertip="将当前选区中的可见单元格底色设置为红色。" />
+            </box>
+            <box id="AccuXMarkBottomRow" boxStyle="horizontal">
+              <button id="accux.mark.yellow"
+                      label="标黄"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="标黄"
+                      supertip="将当前选区中的可见单元格底色设置为黄色。" />
+              <button id="accux.mark.blue"
+                      label="标蓝"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="标蓝"
+                      supertip="将当前选区中的可见单元格底色设置为蓝色。" />
+            </box>
+          </box>
+        </group>
       </tab>
     </tabs>
   </ribbon>

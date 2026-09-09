@@ -100,16 +100,10 @@ namespace AccuX.Host
             var range = ResolveCommentRangeOrThrow(target, true);
             try
             {
-                var comment = range.Comment;
-                if (comment == null)
-                {
-                    range.AddComment(text);
-                }
-                else
-                {
-                    // 更新现有批注，避免先删除再新增导致批注格式或宿主状态丢失。
-                    comment.Text(text, 1, true);
-                }
+                // 保存始终按“覆盖”处理：清除目标单元格的旧备注后直接创建新备注。
+                // ClearComments 在没有旧备注时是无操作，因此无需先读取/判断 Comment 是否存在。
+                range.ClearComments();
+                range.AddComment(text);
             }
             catch (Exception ex)
             {

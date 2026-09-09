@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AccuX.Modules.Mark</RootNamespace>
+    <AssemblyName>AccuX.Modules.Mark</AssemblyName>
+    <Description>AccuX 标记模块：为当前选区可见单元格设置底色。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AccuX.Core\AccuX.Core.csproj" />
+  </ItemGroup>
+
+</Project>

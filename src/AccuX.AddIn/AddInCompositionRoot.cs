@@ -9,6 +9,7 @@ using AccuX.Host;
 using AccuX.Modules.BasicFinance;
 using AccuX.Modules.BasicFinance.Common;
 using AccuX.Modules.BasicFinance.UI;
+using AccuX.Modules.Mark;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace AccuX.AddIn
@@ -63,7 +64,7 @@ namespace AccuX.AddIn
             var host = new ExcelRangeOperationHost(_application, hostOptions);
             var pipeline = new RangeOperationPipeline(host, Logger);
 
-            var context = new ModuleContext(Config, Logger, host.Context, pipeline, AccuXVersion, host, host);
+            var context = new ModuleContext(Config, Logger, host.Context, pipeline, AccuXVersion, host, host, host);
             Dispatcher = new CommandDispatcher(context, Logger);
 
             // 用户交互统一由 WPF 实现；模块通过 IUserPrompt 使用。
@@ -73,6 +74,9 @@ namespace AccuX.AddIn
             _moduleRegistry = new ModuleRegistry(Logger);
             var basicFinance = new BasicFinanceModule { PromptOverride = Prompt };
             _moduleRegistry.Register(basicFinance, context, Dispatcher);
+
+            var mark = new MarkModule();
+            _moduleRegistry.Register(mark, context, Dispatcher);
 
             Logger.Info("AccuX 启动完成，已注册命令数：" + Dispatcher.Commands.Count);
         }

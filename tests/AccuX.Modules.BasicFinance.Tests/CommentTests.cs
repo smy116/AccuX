@@ -141,6 +141,22 @@ namespace AccuX.Modules.BasicFinance.Tests
         }
 
         [Fact]
+        public void SaveExistingComment_UsesOverwriteWrite()
+        {
+            var host = new RecordingCommentHost { Existing = new CellComment(true, "旧批注") };
+            var prompt = new RecordingCommentPrompt
+            {
+                Result = CommentDialogResult.Save("新批注", CommentKind.Plain)
+            };
+
+            var result = Execute(new CommentCommand(prompt), host);
+
+            Assert.True(result.Success);
+            Assert.Equal("新批注", host.SavedText);
+            Assert.Equal(1, host.SaveCalls);
+        }
+
+        [Fact]
         public void SaveEncryptedComment_StoresMarkedBase64Payload()
         {
             var host = new RecordingCommentHost { Existing = CellComment.None };

@@ -17,7 +17,8 @@ namespace AccuX.Core.Modules
             RangeOperationPipeline pipeline,
             string accuXVersion,
             IWorkbookDirectoryHost workbookDirectoryHost = null,
-            ICellCommentHost cellCommentHost = null)
+            ICellCommentHost cellCommentHost = null,
+            ICellMarkHost cellMarkHost = null)
         {
             Config = config ?? throw new ArgumentNullException(nameof(config));
             Logger = logger ?? NullLogger.Instance;
@@ -25,6 +26,7 @@ namespace AccuX.Core.Modules
             Pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
             WorkbookDirectoryHost = workbookDirectoryHost;
             CellCommentHost = cellCommentHost;
+            CellMarkHost = cellMarkHost;
             AccuXVersion = accuXVersion ?? string.Empty;
         }
 
@@ -39,6 +41,8 @@ namespace AccuX.Core.Modules
         public IWorkbookDirectoryHost WorkbookDirectoryHost { get; }
 
         public ICellCommentHost CellCommentHost { get; }
+
+        public ICellMarkHost CellMarkHost { get; }
 
         public string AccuXVersion { get; }
     }

@@ -62,6 +62,14 @@ namespace AccuX.AddIn.Ribbon
                     return "directory.png";
                 case "accux.basic.comment":
                     return "sum.png";
+                case "accux.mark.green":
+                    return "mark-green.png";
+                case "accux.mark.red":
+                    return "mark-red.png";
+                case "accux.mark.yellow":
+                    return "mark-yellow.png";
+                case "accux.mark.blue":
+                    return "mark-blue.png";
                 default:
                     return "round.png";
             }

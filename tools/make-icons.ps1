@@ -112,5 +112,41 @@ New-AccuXIcon -Path (Join-Path $OutputDirectory 'directory.png') -AccentColor ([
     $g.DrawLine($pen, 17, 22, 21, 22)
 }
 
+function New-AccuXTextIcon {
+    param(
+        [string]$Path,
+        [System.Drawing.Color]$BackgroundColor,
+        [string]$Symbol
+    )
+
+    $size = 32
+    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.Clear($BackgroundColor)
+
+    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+    $font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $format = New-Object System.Drawing.StringFormat
+    $format.Alignment = [System.Drawing.StringAlignment]::Center
+    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+    $graphics.DrawString($Symbol, $font, $whiteBrush, (New-Object System.Drawing.RectangleF(2, 1, 28, 29)), $format)
+
+    $format.Dispose()
+    $font.Dispose()
+    $whiteBrush.Dispose()
+    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $graphics.Dispose()
+    $bitmap.Dispose()
+}
+
+# Mark colors: opaque color tile with the requested white letter.
+New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-green.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 24, 190, 106)) -Symbol 'T'
+New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-red.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 237, 64, 21)) -Symbol 'F'
+New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-yellow.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 254, 153, 0)) -Symbol 'W'
+New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-blue.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 45, 183, 245)) -Symbol 'M'
+
 Write-Host "Icons written to $OutputDirectory"
 Get-ChildItem $OutputDirectory -Filter *.png | ForEach-Object { Write-Host " - $($_.Name)" }

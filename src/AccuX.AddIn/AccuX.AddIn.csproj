@@ -16,6 +16,7 @@
     <ProjectReference Include="..\AccuX.Core\AccuX.Core.csproj" />
     <ProjectReference Include="..\AccuX.Host\AccuX.Host.csproj" />
     <ProjectReference Include="..\AccuX.Modules.BasicFinance\AccuX.Modules.BasicFinance.csproj" />
+    <ProjectReference Include="..\AccuX.Modules.Mark\AccuX.Modules.Mark.csproj" />
   </ItemGroup>
 
   <ItemGroup>

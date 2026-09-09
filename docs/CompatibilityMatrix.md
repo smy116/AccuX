@@ -23,6 +23,7 @@
 | COM Add-in Load | Excel | 16.0 | x64 | 通过 | HKCU 注册；`COMAddIns` 显示 Connect=True |
 | Visual Studio F5 启动 | Excel | 16.0 | x64 | 待验证 | 需在 VS 中选择 Excel 启动配置文件 |
 | Ribbon 加载 | Excel | 16.0 | x64 | 通过 | UI Automation 枚举到 AccuX 选项卡与「基础财务」组 |
+| 标记 Ribbon 组 | Excel | 16.0 | x64 | 待验证 | 需确认「标记」独立组、两行两列布局及四个图标 |
 | Ribbon 图标显示 | Excel | 16.0 | x64 | 待验证 | 按钮已渲染，图标视觉效果需人工确认 |
 | Selection 获取 | Excel | 16.0 | x64 | 待验证 | 仅捕获一次 RangeTarget |
 | Value 批量读取 | Excel | 16.0 | x64 | 待验证 | 整块 `Range.Value` |
@@ -37,6 +38,7 @@
 | 隐藏行/列识别 | Excel | 16.0 | x64 | 待验证 | Host 读取 `Rows.Hidden` / `Columns.Hidden`，公共 Pipeline 跳过隐藏单元格 |
 | 选区求和 | Excel | 16.0 | x64 | 待验证 | 可见数字求和、两位舍入、千分位剪切板文本与提示框 |
 | 生成目录 | Excel | 16.0 | x64 | 通过 | 临时工作簿 COM 验证：仅列出可见工作表，目录插入首位，名称列使用内部超链接 |
+| 可见单元格底色标记 | Excel | 16.0 | x64 | 待验证 | 需验证四种颜色、隐藏行列跳过以及值/公式/数字格式保持不变 |
 | 剪切板复制 | Excel | 16.0 | x64 | 待验证 | 复制格式化合计数字；失败时不得显示成功提示 |
 | ScreenUpdating | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | EnableEvents | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
@@ -52,11 +54,13 @@
 | --- | --- | --- | --- | --- | --- |
 | COM Add-in Load | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Ribbon 加载 | WPS | - | - | 未验证 | 本机未安装 WPS |
+| 标记 Ribbon 组 | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Formula 读取 | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Formula 写回 | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Range Value | WPS | - | - | 未验证 | 本机未安装 WPS |
 | 隐藏行/列识别 | WPS | - | - | 未验证 | 需验证 `Rows.Hidden` / `Columns.Hidden` 返回值 |
 | 生成目录 | WPS | - | - | 未验证 | 需验证可见性、首位插入与内部超链接行为 |
+| 可见单元格底色标记 | WPS | - | - | 未验证 | 需验证 `Interior.Pattern` / `Interior.Color` 与隐藏行列处理 |
 | 选区求和 | WPS | - | - | 未验证 | 需验证可见数字求和、剪切板复制与提示框顺序 |
 | 剪切板复制 | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Ribbon callback | WPS | - | - | 未验证 | 本机未安装 WPS |

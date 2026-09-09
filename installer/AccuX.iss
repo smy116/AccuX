@@ -57,6 +57,7 @@ Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\AccuX.AddIn.dll"; DestDir: 
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\AccuX.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\AccuX.Host.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\AccuX.Modules.BasicFinance.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\AccuX.Modules.Mark.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\Newtonsoft.Json.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\Microsoft.Office.Interop.Excel.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\office.dll"; DestDir: "{app}"; Flags: ignoreversion
