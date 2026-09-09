@@ -76,11 +76,12 @@ powershell -ExecutionPolicy Bypass -File tools\register.ps1
 powershell -ExecutionPolicy Bypass -File tools\unregister.ps1
 ```
 
-注册脚本使用 `RegAsm /regfile` 生成注册表脚本，改写为当前用户根键后导入（真正的 HKCU 注册，无需管理员），并在以下位置写入 `LoadBehavior=3`（子键名必须是 ProgId）：
+注册脚本使用 32 位与 64 位 `RegAsm /regfile` 分别生成注册表脚本，改写为当前用户根键后导入（真正的 HKCU 注册，无需管理员）。Excel 写入 `LoadBehavior=3` 的 ProgId 子键；WPS 表格额外在 `AddinsWL` 根键写入 ProgId 白名单值：
 
 ```
 HKCU\Software\Microsoft\Office\Excel\Addins\AccuX.AddIn.Connect
-HKCU\Software\Kingsoft\Office\ET\AddinsWL\AccuX.AddIn.Connect
+HKCU\Software\Kingsoft\Office\ET\AddinsWL
+  "AccuX.AddIn.Connect"=""
 ```
 
 已验证：注册后 `Type.GetTypeFromProgID('AccuX.AddIn.Connect')` 可解析并实例化，`GetCustomUI` 返回正确 Ribbon XML，五个图标均可转换为 `IPictureDisp`。

@@ -22,7 +22,7 @@
 #define AccuXFriendlyName "AccuX"
 #define SourceRoot "..\src"
 
-; Add-ins 子键名必须是 ProgId：宿主按子键名做 CoCreateInstance。
+; Excel Add-ins 子键名必须是 ProgId：宿主按子键名做 CoCreateInstance。
 #define ExcelAddinKey "Software\Microsoft\Office\Excel\Addins\" + AccuXProgId
 #define WpsAddinKey "Software\Kingsoft\Office\ET\AddinsWL\" + AccuXProgId
 
@@ -75,6 +75,9 @@ Root: HKLM32; Subkey: "{#ExcelAddinKey}"; ValueType: string; ValueName: "Friendl
 Root: HKLM32; Subkey: "{#ExcelAddinKey}"; ValueType: dword;  ValueName: "LoadBehavior"; ValueData: "3"
 
 ; WPS 表格 Add-in 注册（同样写入两个注册表视图）。
+; WPS 的 AddinsWL 是 ProgId 白名单，ProgId 必须是根键下的字符串值，而不是子键。
+Root: HKLM;   Subkey: "Software\Kingsoft\Office\ET\AddinsWL"; ValueType: string; ValueName: "{#AccuXProgId}"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKLM32; Subkey: "Software\Kingsoft\Office\ET\AddinsWL"; ValueType: string; ValueName: "{#AccuXProgId}"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKLM;   Subkey: "{#WpsAddinKey}"; ValueType: string; ValueName: "Description";  ValueData: "AccuX 财务效率插件"; Flags: uninsdeletekey
 Root: HKLM;   Subkey: "{#WpsAddinKey}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "{#AccuXFriendlyName}"
 Root: HKLM;   Subkey: "{#WpsAddinKey}"; ValueType: dword;  ValueName: "LoadBehavior"; ValueData: "3"

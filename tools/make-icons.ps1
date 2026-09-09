@@ -19,28 +19,19 @@ function New-AccuXIcon {
     )
 
     $size = 32
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size)
+    # WPS 通过 IPictureDisp 显示图标时不会稳定保留 PNG Alpha，
+    # 透明像素会被垫成灰色方块。使用 24bpp 不透明画布避免灰边。
+    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $graphics.Clear([System.Drawing.Color]::Transparent)
+    $graphics.Clear([System.Drawing.Color]::White)
 
-    # Deep blue tile keeps the icons visually unified in Excel's Ribbon.
+    # Fill the entire canvas so WPS does not show a gray/white matte around
+    # transparent or rounded corners in the Ribbon.
     $background = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 20, 49, 70))
-    $rounded = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $radius = 7
-    $diameter = $radius * 2
-    $inset = 2
-    $rounded.AddArc($inset, $inset, $diameter, $diameter, 180, 90)
-    $rounded.AddArc($size - $inset - $diameter, $inset, $diameter, $diameter, 270, 90)
-    $rounded.AddArc($size - $inset - $diameter, $size - $inset - $diameter, $diameter, $diameter, 0, 90)
-    $rounded.AddArc($inset, $size - $inset - $diameter, $diameter, $diameter, 90, 90)
-    $rounded.CloseFigure()
-    $graphics.FillPath($background, $rounded)
-
-    $tileEdge = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(90, 255, 255, 255), 0.8)
-    $graphics.DrawPath($tileEdge, $rounded)
+    $graphics.FillRectangle($background, 0, 0, $size, $size)
 
     $white = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 246, 250, 252), 2.5)
     $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 246, 250, 252))
@@ -59,8 +50,6 @@ function New-AccuXIcon {
     $accent.Dispose()
     $whiteBrush.Dispose()
     $white.Dispose()
-    $tileEdge.Dispose()
-    $rounded.Dispose()
     $background.Dispose()
     $graphics.Dispose()
     $bitmap.Dispose()
