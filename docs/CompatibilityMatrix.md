@@ -10,7 +10,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| AccuX 版本 | 1.0.0 |
+| AccuX 版本 | 1.0 |
 | 开发机 Office | Microsoft Office 16（Excel x64，路径 `C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE`） |
 | 开发机 WPS | 未安装 |
 | 目标框架 | .NET Framework 4.8 |
@@ -45,8 +45,8 @@
 | DisplayAlerts | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | Calculation | Excel | 16.0 | x64 | 待验证 | V1 默认不切换计算模式 |
 | WPF Owner | Excel | 16.0 | x64 | 待验证 | SetWindowLongPtr 关联主窗口 |
-| 安装包加载 | Excel | 16.0 | x64 | 待验证 | Inno Setup，尚未编译验证 |
-| 卸载 / 升级 | Excel | 16.0 | x64 | 待验证 | Inno Setup，尚未编译验证 |
+| 安装包加载 | Excel | 16.0 | x64 | 待验证 | Inno Setup 6.7.3 已完成 CI 编译，真实宿主加载仍需人工验证 |
+| 卸载 / 升级 | Excel | 16.0 | x64 | 待验证 | Inno Setup 6.7.3 已完成 CI 编译，真实安装/卸载仍需人工验证 |
 
 ## WPS 验证记录
 

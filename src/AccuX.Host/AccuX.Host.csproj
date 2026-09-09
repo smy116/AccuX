@@ -25,15 +25,18 @@
       详见 docs/CompatibilityMatrix.md。
     -->
     <Reference Include="Microsoft.Office.Interop.Excel">
-      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Excel\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Excel.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' != '' and Exists('$(OfficePiaPath)\Microsoft.Office.Interop.Excel.dll')">$(OfficePiaPath)\Microsoft.Office.Interop.Excel.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' == '' or !Exists('$(OfficePiaPath)\Microsoft.Office.Interop.Excel.dll')">$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Excel\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Excel.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="office">
-      <HintPath>$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\office.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' != '' and Exists('$(OfficePiaPath)\Office.dll')">$(OfficePiaPath)\Office.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' == '' or !Exists('$(OfficePiaPath)\Office.dll')">$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\office.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="Microsoft.Vbe.Interop">
-      <HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' != '' and Exists('$(OfficePiaPath)\Microsoft.Vbe.Interop.dll')">$(OfficePiaPath)\Microsoft.Vbe.Interop.dll</HintPath>
+      <HintPath Condition="'$(OfficePiaPath)' == '' or !Exists('$(OfficePiaPath)\Microsoft.Vbe.Interop.dll')">$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

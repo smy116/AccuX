@@ -11,10 +11,23 @@
     <Company>AccuX</Company>
     <Product>AccuX</Product>
     <Authors>AccuX</Authors>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <AccuXVersion>1.0.0</AccuXVersion>
+    <!--
+      The public release tag is two-part (for example v1.0). The CLR still
+      receives a four-part assembly/file version through build.ps1 when a
+      release is built (1.0.0.0).
+    -->
+    <Version Condition="'$(Version)' == ''">1.0</Version>
+    <FileVersion Condition="'$(FileVersion)' == ''">1.0.0.0</FileVersion>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.0.0.0</AssemblyVersion>
+    <AccuXVersion Condition="'$(AccuXVersion)' == ''">1.0</AccuXVersion>
+
+    <!--
+      CI supplies OfficePiaPath explicitly. On a developer machine prefer the
+      Visual Studio Office 15 PIA, then let the project files fall back to the
+      existing GAC paths when that directory is unavailable.
+    -->
+    <OfficePiaPath Condition="'$(OfficePiaPath)' == '' and Exists('$(MSBuildProgramFiles32)\Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15')">$(MSBuildProgramFiles32)\Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15</OfficePiaPath>
+    <OfficePiaPath Condition="'$(OfficePiaPath)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15')">$(ProgramFiles)\Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15</OfficePiaPath>
 
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>

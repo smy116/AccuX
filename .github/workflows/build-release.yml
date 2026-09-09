@@ -1,0 +1,286 @@
+name: Build and release AccuX
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accux-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      assembly_version: ${{ steps.version.outputs.assembly_version }}
+      output_base_filename: ${{ steps.version.outputs.output_base_filename }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - name: Validate tag and calculate build version
+        id: version
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '1.0'
+          $isRelease = 'false'
+
+          if ($env:REF_TYPE -eq 'tag') {
+            if ($env:REF_NAME -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+              throw "非法版本 tag '$($env:REF_NAME)'。正式版本必须是 v主版本.次版本，例如 v1.0。"
+            }
+
+            $major = [int64]$Matches[1]
+            $minor = [int64]$Matches[2]
+            if ($major -gt 65534 -or $minor -gt 65534) {
+              throw "版本段必须在 0 到 65534 之间：$($env:REF_NAME)"
+            }
+
+            $version = "$major.$minor"
+            $isRelease = 'true'
+          }
+
+          $parts = $version.Split('.')
+          $assemblyVersion = "$($parts[0]).$($parts[1]).0.0"
+          $shortSha = $env:COMMIT_SHA.Substring(0, 7)
+          if ($isRelease -eq 'true') {
+            $outputBaseFilename = "AccuXSetup-$version"
+          }
+          else {
+            $outputBaseFilename = "AccuXSetup-$version-ci.$($env:RUN_NUMBER).$shortSha"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
+          "output_base_filename=$outputBaseFilename" >> $env:GITHUB_OUTPUT
+          "is_release=$isRelease" >> $env:GITHUB_OUTPUT
+
+          Write-Host "版本：$version；程序集版本：$assemblyVersion；Release：$isRelease"
+
+  build:
+    name: Build installer
+    needs: prepare
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Inno Setup 6.7.3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installerPath = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' `
+            -OutFile $installerPath
+          $expectedHash = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "Inno Setup 下载校验失败，实际 SHA-256 为 $actualHash。"
+          }
+
+          $install = Start-Process -FilePath $installerPath `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' `
+            -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "Inno Setup 安装失败，退出码 $($install.ExitCode)。"
+          }
+
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            throw "未找到 ISCC.exe：$iscc"
+          }
+          $versionKeys = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1'
+          )
+          $actualVersion = $null
+          foreach ($versionKey in $versionKeys) {
+            if (Test-Path -LiteralPath $versionKey) {
+              $actualVersion = (Get-ItemProperty -LiteralPath $versionKey).DisplayVersion
+              break
+            }
+          }
+          if ($actualVersion -ne '6.7.3') {
+            throw "ISCC 版本不符合要求，期望 6.7.3，实际为 $actualVersion。"
+          }
+
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+          Write-Host "使用 Inno Setup $actualVersion。"
+
+      - name: Locate Office 15 PIA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15'),
+            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Shared\Visual Studio Tools for Office\PIA\Office15')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
+
+          $piaNames = @('Microsoft.Office.Interop.Excel.dll', 'Office.dll', 'Microsoft.Vbe.Interop.dll')
+          $piaPath = $null
+          foreach ($candidate in $candidates) {
+            $files = $piaNames | ForEach-Object { Join-Path $candidate $_ }
+            if (($files | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0) {
+              foreach ($file in $files) {
+                $version = [Reflection.AssemblyName]::GetAssemblyName($file).Version.ToString()
+                if ($version -ne '15.0.0.0') {
+                  throw "Office PIA 必须是 15.0.0.0：$file 实际为 $version"
+                }
+              }
+              $piaPath = (Resolve-Path -LiteralPath $candidate).Path
+              break
+            }
+          }
+
+          if ($piaPath) {
+            "OfficePiaPath=$piaPath" >> $env:GITHUB_ENV
+            Write-Host "使用 Office PIA：$piaPath"
+          }
+          else {
+            Write-Host '未找到 Visual Studio Office15 PIA，将由 build.ps1 检查并使用 GAC 兼容路径。'
+          }
+
+      - name: Build, test, and validate dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./build.ps1 `
+            -Configuration Release `
+            -Version '${{ needs.prepare.outputs.version }}' `
+            -OfficePiaPath $env:OfficePiaPath
+          if ($LASTEXITCODE -ne 0) { throw 'AccuX 构建或测试失败。' }
+
+      - name: Validate installer transaction
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./installer/Test-Installer.ps1 `
+            -Iscc $env:ISCC `
+            -Version '${{ needs.prepare.outputs.version }}' `
+            -FileVersion '${{ needs.prepare.outputs.assembly_version }}'
+          if ($LASTEXITCODE -ne 0) { throw '安装器回归测试失败。' }
+
+      - name: Compile installer
+        shell: pwsh
+        env:
+          ACCUX_VERSION: ${{ needs.prepare.outputs.version }}
+          ACCUX_FILE_VERSION: ${{ needs.prepare.outputs.assembly_version }}
+          ACCUX_OUTPUT_BASE: ${{ needs.prepare.outputs.output_base_filename }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'accux-artifacts'
+          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'installer\AccuX.iss'
+
+          & $env:ISCC `
+            "/DAccuXVersion=$env:ACCUX_VERSION" `
+            "/DAccuXFileVersion=$env:ACCUX_FILE_VERSION" `
+            "/DAccuXOutputBaseFilename=$env:ACCUX_OUTPUT_BASE" `
+            "/O$artifactDirectory" `
+            $scriptPath
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 编译失败。' }
+
+          $setupPath = Join-Path $artifactDirectory "$env:ACCUX_OUTPUT_BASE.exe"
+          if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
+            throw "未生成安装包：$setupPath"
+          }
+
+          $hash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$([IO.Path]::GetFileName($setupPath))" | Set-Content -LiteralPath "$setupPath.sha256" -Encoding ascii
+          Write-Host "安装包：$setupPath"
+          Write-Host "SHA-256：$hash"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccuX-installer-${{ github.run_id }}
+          path: ${{ runner.temp }}\accux-artifacts\*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AccuX-build-logs-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}\accux-artifacts\**\*
+            ${{ github.workspace }}\installer\Output\**\*.log
+            ${{ github.workspace }}\artifacts\**\*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    if: needs.prepare.outputs.is_release == 'true'
+    needs:
+      - prepare
+      - build
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AccuX-installer-${{ github.run_id }}
+          path: release-assets
+
+      - name: Create draft, upload assets, and publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repository = '${{ github.repository }}'
+          $tag = $env:TAG_NAME
+          $releaseApi = "repos/$repository/releases/tags/$tag"
+
+          $existing = & gh api $releaseApi 2>$null
+          $existingExitCode = $LASTEXITCODE
+          if ($existingExitCode -eq 0) {
+            $release = $existing | ConvertFrom-Json
+            if (-not $release.draft) {
+              throw "Release $tag 已经公开，拒绝覆盖已有附件。"
+            }
+            Write-Host "复用已有草稿 Release $tag。"
+          }
+          else {
+            & gh release create $tag `
+              --repo $repository `
+              --verify-tag `
+              --draft `
+              --title "AccuX v$($env:RELEASE_VERSION)" `
+              --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "创建草稿 Release 失败：$tag" }
+          }
+
+          $assets = Get-ChildItem -LiteralPath 'release-assets' -File | ForEach-Object { $_.FullName }
+          if (-not $assets) { throw 'Release 没有可上传的安装包附件。' }
+          & gh release upload $tag @assets --repo $repository --clobber
+          if ($LASTEXITCODE -ne 0) { throw "上传 Release 附件失败：$tag" }
+
+          & gh release edit $tag --repo $repository --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "公开 Release 失败：$tag" }
+          Write-Host "已发布 AccuX v$($env:RELEASE_VERSION)。"

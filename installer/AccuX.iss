@@ -1,7 +1,7 @@
 ; AccuX V1 安装脚本（规格 §26 安装与部署约定）
 ;
 ; 编译：ISCC.exe installer\AccuX.iss
-; 产物：installer\Output\AccuXSetup-1.0.0.exe
+; 产物：installer\Output\AccuXSetup-1.0.exe
 ;
 ; 要求：
 ;   - 检查 .NET Framework 4.8 前置条件；缺失时自动下载并安装；
@@ -17,7 +17,15 @@
 ;   - Add-in 程序集为 AnyCPU（MSIL），同一份 DLL 由 32 位与 64 位 Office 共用，
 ;     因此注册表项需要同时写入 32 位与 64 位视图。
 
-#define AccuXVersion "1.0.0"
+#ifndef AccuXVersion
+#define AccuXVersion "1.0"
+#endif
+#ifndef AccuXFileVersion
+#define AccuXFileVersion "1.0.0.0"
+#endif
+#ifndef AccuXOutputBaseFilename
+#define AccuXOutputBaseFilename "AccuXSetup-{#AccuXVersion}"
+#endif
 #define AccuXProgId "AccuX.AddIn.Connect"
 #define AccuXFriendlyName "AccuX"
 #define SourceRoot "..\src"
@@ -31,12 +39,13 @@ AppId={{8E3B2A64-1C7D-4A9F-9E5B-2D6F0A8C4B31}
 AppName=AccuX
 AppVersion={#AccuXVersion}
 AppVerName=AccuX {#AccuXVersion}
+VersionInfoVersion={#AccuXFileVersion}
 AppPublisher=AccuX
 DefaultDirName={autopf}\AccuX
 DefaultGroupName=AccuX
 DisableProgramGroupPage=yes
 OutputDir=Output
-OutputBaseFilename=AccuXSetup-{#AccuXVersion}
+OutputBaseFilename={#AccuXOutputBaseFilename}
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -45,7 +54,8 @@ MinVersion=6.1sp1
 ; 32 位 Windows 上自动回退为 32 位安装模式（不设 ArchitecturesAllowed）。
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
-UninstallDisplayName=AccuX {#AccuXVersion}
+UninstallDisplayName=AccuX
+SetupLogging=yes
 
 [Languages]
 ; 先读官方默认消息，再由简体中文覆盖，保证个别未翻译消息仍有英文兜底。
@@ -62,13 +72,16 @@ Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\Newtonsoft.Json.dll"; DestD
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\Microsoft.Office.Interop.Excel.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\office.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\AccuX.AddIn\bin\Release\net48\Microsoft.Vbe.Interop.dll"; DestDir: "{app}"; Flags: ignoreversion
+; 所有文件落盘后，由第一个 [Registry] 条目的代码常量注册 COM。
 Source: "{#SourceRoot}\AccuX.AddIn\config.sample.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 ; Excel Add-in 注册（机器级，安装包需要管理员权限）。
 ; 同一组值分别写入默认视图（64 位安装模式下即 64 位视图）与 32 位视图，
 ; 保证 64 位 Office 与 32 位 Office 都能读到。
-Root: HKLM;   Subkey: "{#ExcelAddinKey}"; ValueType: string; ValueName: "Description";  ValueData: "AccuX 财务效率插件"; Flags: uninsdeletekey
+; 首项通过代码常量注册 COM：常量求值失败会中止原生安装事务。
+; 不可改为 BeforeInstall/AfterInstall，Inno 会捕获这些回调的异常后继续。
+Root: HKLM;   Subkey: "{code:RegisterComAndGetKey|{#ExcelAddinKey}}"; ValueType: string; ValueName: "Description";  ValueData: "AccuX 财务效率插件"; Flags: uninsdeletekey
 Root: HKLM;   Subkey: "{#ExcelAddinKey}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "{#AccuXFriendlyName}"
 Root: HKLM;   Subkey: "{#ExcelAddinKey}"; ValueType: dword;  ValueName: "LoadBehavior"; ValueData: "3"
 Root: HKLM32; Subkey: "{#ExcelAddinKey}"; ValueType: string; ValueName: "Description";  ValueData: "AccuX 财务效率插件"; Flags: uninsdeletekey
@@ -88,8 +101,8 @@ Root: HKLM32; Subkey: "{#WpsAddinKey}"; ValueType: dword;  ValueName: "LoadBehav
 
 [UninstallRun]
 ; 注销 COM 可见程序集（与 [Code] 中注册逻辑对应）。
-Filename: "{dotnet4032}\RegAsm.exe"; Parameters: "/unregister ""{app}\AccuX.AddIn.dll"""; Flags: runhidden waituntilterminated; RunOnceId: "UnregAsm32"
-Filename: "{dotnet4064}\RegAsm.exe"; Parameters: "/unregister ""{app}\AccuX.AddIn.dll"""; Flags: runhidden waituntilterminated; RunOnceId: "UnregAsm64"; Check: IsWin64
+Filename: "{dotnet4032}\RegAsm.exe"; Parameters: "/unregister ""{app}\AccuX.AddIn.dll"""; Flags: runhidden waituntilterminated logoutput; RunOnceId: "UnregAsm32"
+Filename: "{dotnet4064}\RegAsm.exe"; Parameters: "/unregister ""{app}\AccuX.AddIn.dll"""; Flags: runhidden waituntilterminated logoutput; RunOnceId: "UnregAsm64"; Check: IsWin64
 
 [Code]
 const
@@ -106,9 +119,96 @@ const
   Ndp48BaseName = 'ndp48-web.exe';
   Ndp48Sha256 = '0bba3094588c4bfec301939985222a20b340bf03431563dec8b2b4478b06fffa';
 
+type
+  TFileBackup = record
+    Destination: String;
+    Backup: String;
+  end;
+  TRegistryBackup = record
+    Root: Integer;
+    Subkey: String;
+    RegExe: String;
+    Backup: String;
+    Existed: Boolean;
+  end;
+
 var
   DownloadPage: TDownloadWizardPage;
   DotNet48RebootRequired: Boolean;
+  PrerequisiteError: String;
+  FileBackups: array of TFileBackup;
+  RegistryBackups: array of TRegistryBackup;
+  ComRegistrationStarted: Boolean;
+  ComRegistrationComplete: Boolean;
+  InstallCommitted: Boolean;
+
+procedure ReportInstallError(const MessageText: String);
+begin
+  Log(MessageText);
+  if not WizardSilent then
+    SuppressibleMsgBox(MessageText, mbCriticalError, MB_OK, IDOK);
+end;
+
+procedure FailInstall(const MessageText: String);
+begin
+  Log(MessageText);
+  { 仅从 ssInstall 或 [Registry] 代码常量调用：异常在这两个位置
+    属于安装失败；BeforeInstall/AfterInstall 异常会被捕获后继续。 }
+  RaiseException(MessageText);
+end;
+
+procedure BackupPackageFile(const Name: String);
+var
+  Destination, Backup: String;
+  I: Integer;
+begin
+  Destination := ExpandConstant('{app}\') + Name;
+  for I := 0 to GetArrayLength(FileBackups) - 1 do
+    if CompareText(FileBackups[I].Destination, Destination) = 0 then
+      Exit;
+  if not FileExists(Destination) then
+    Exit;
+  I := GetArrayLength(FileBackups);
+  Backup := ExpandConstant('{tmp}\accux-file-') + IntToStr(I) + '.bak';
+  if not CopyFile(Destination, Backup, True) then
+    FailInstall('无法备份旧文件，安装已中止：' + Destination);
+  SetArrayLength(FileBackups, I + 1);
+  FileBackups[I].Destination := Destination;
+  FileBackups[I].Backup := Backup;
+end;
+
+procedure BackupRegistryKey(Root: Integer; const RegExe, Subkey: String);
+var
+  I, ResultCode: Integer;
+  Snapshot: TRegistryBackup;
+begin
+  Snapshot.Root := Root;
+  Snapshot.Subkey := Subkey;
+  Snapshot.RegExe := RegExe;
+  Snapshot.Existed := RegKeyExists(Root, Subkey);
+  I := GetArrayLength(RegistryBackups);
+  Snapshot.Backup := ExpandConstant('{tmp}\accux-reg-') + IntToStr(I) + '.reg';
+  if Snapshot.Existed then
+  begin
+    if not Exec(RegExe, 'export "HKLM\' + Subkey + '" "' +
+        Snapshot.Backup + '" /y', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      FailInstall('无法启动注册表备份：' + SysErrorMessage(ResultCode));
+    if (ResultCode <> 0) or not FileExists(Snapshot.Backup) then
+      FailInstall(Format('注册表备份失败（%d）：%s', [ResultCode, Subkey]));
+  end;
+  SetArrayLength(RegistryBackups, I + 1);
+  RegistryBackups[I] := Snapshot;
+end;
+
+procedure BackupComView(Root: Integer; const RegExe: String);
+begin
+  { 当前程序集 RegAsm /regfile 的完整根键集合，包含两个公开枚举 Record。
+    修改 COM 可见类型时，必须同步校验此清单（见 installer/README.md）。 }
+  BackupRegistryKey(Root, RegExe, 'Software\Classes\{#AccuXProgId}');
+  BackupRegistryKey(Root, RegExe, 'Software\Classes\CLSID\{7C1F0E4A-9B2D-4E8C-A1F3-6D5E8B0C2A11}');
+  BackupRegistryKey(Root, RegExe, 'Software\Classes\Record\{0513544E-578A-3CEC-B4FF-26A0B3C8F5C1}');
+  BackupRegistryKey(Root, RegExe, 'Software\Classes\Record\{118B8701-9F8D-328C-B588-4AD2114FA50C}');
+end;
 
 { 读取 Release 值判断是否已安装 .NET Framework 4.8 或更高版本。 }
 function IsDotNet48OrLater(): Boolean;
@@ -129,14 +229,47 @@ begin
   DownloadPage.ShowBaseNameInsteadOfUrl := True;
 end;
 
+function HandleDotNet48ExitCode(ResultCode: Integer): Boolean;
+begin
+  Result := False;
+  PrerequisiteError := '';
+  { 0 = 成功；3010 / 1641 = 成功但需重启；1602 = 用户取消；1603 = 致命错误；
+    5100 = 不满足系统要求。 }
+  Log(Format('.NET Framework 安装程序退出码：%d', [ResultCode]));
+  case ResultCode of
+    3010, 1641:
+      begin
+        { 重启返回码优先于 Release 检测：注册表已更新不代表运行时已就绪。 }
+        DotNet48RebootRequired := True;
+        Result := True;
+      end;
+    0:
+      begin
+        if IsDotNet48OrLater() then
+          Result := True
+        else
+          PrerequisiteError := '.NET 安装程序返回成功，但仍未检测到 .NET Framework 4.8。请检查安装日志后重试。';
+      end;
+    1602:
+      PrerequisiteError := '.NET Framework 4.8 安装已被取消。';
+    1603:
+      PrerequisiteError := '.NET Framework 4.8 安装失败（错误 1603：安装过程中发生致命错误）。' + #13#10#13#10 +
+        '请查看安装日志，或手动安装后重新运行本安装程序。';
+    5100:
+      PrerequisiteError := '.NET Framework 4.8 安装失败（错误 5100：本机不满足系统要求）。';
+  else
+    PrerequisiteError := Format('.NET Framework 4.8 安装程序返回错误代码 %d。', [ResultCode]);
+  end;
+end;
+
 { 下载并静默安装 .NET Framework 4.8。返回 True 表示已就绪或已交由重启完成。 }
 function InstallDotNet48(): Boolean;
 var
   InstallerPath: String;
   ResultCode: Integer;
-  ErrorMessage: String;
 begin
   Result := False;
+  PrerequisiteError := '';
 
   DownloadPage.Clear;
   DownloadPage.Add(Ndp48Url, Ndp48BaseName, Ndp48Sha256);
@@ -146,14 +279,13 @@ begin
       DownloadPage.Download;
     except
       if DownloadPage.AbortedByUser then
-        MsgBox('已取消下载 .NET Framework 4.8 安装程序。', mbError, MB_OK)
+        PrerequisiteError := '已取消下载 .NET Framework 4.8 安装程序。'
       else
       begin
-        ErrorMessage := Format('下载 .NET Framework 4.8 安装程序失败：%s', [GetExceptionMessage]);
-        ErrorMessage := ErrorMessage + #13#10#13#10 +
+        PrerequisiteError := Format('下载 .NET Framework 4.8 安装程序失败：%s', [GetExceptionMessage]);
+        PrerequisiteError := PrerequisiteError + #13#10#13#10 +
           '请检查网络连接后重试，或从以下地址手动安装后重新运行本安装程序：' + #13#10 +
           'https://dotnet.microsoft.com/download/dotnet-framework/net48';
-        MsgBox(ErrorMessage, mbCriticalError, MB_OK);
       end;
       Exit;
     end;
@@ -164,114 +296,162 @@ begin
   InstallerPath := ExpandConstant('{tmp}\' + Ndp48BaseName);
   if not FileExists(InstallerPath) then
   begin
-    MsgBox('未找到已下载的 .NET Framework 4.8 安装程序。', mbCriticalError, MB_OK);
+    PrerequisiteError := '未找到已下载的 .NET Framework 4.8 安装程序。';
     Exit;
   end;
 
   if not Exec(InstallerPath, '/q /norestart /ChainingPackage AccuX', '',
-      SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+      SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
-    MsgBox('无法启动 .NET Framework 4.8 安装程序。', mbCriticalError, MB_OK);
+    PrerequisiteError := '无法启动 .NET Framework 4.8 安装程序：' + SysErrorMessage(ResultCode);
     Exit;
   end;
 
-  { 0 = 成功；3010 / 1641 = 成功但需重启；1602 = 用户取消；1603 = 致命错误；
-    5100 = 不满足系统要求。 }
-  case ResultCode of
-    0, 3010, 1641:
-      begin
-        if IsDotNet48OrLater() then
-          Result := True
-        else
-        begin
-          { 安装程序返回成功但注册表尚未反映，通常需要重启后才能完成。 }
-          DotNet48RebootRequired := True;
-          Result := True;
-        end;
-      end;
-    1602:
-      MsgBox('.NET Framework 4.8 安装已被取消。', mbError, MB_OK);
-    1603:
-      MsgBox('.NET Framework 4.8 安装失败（错误 1603：安装过程中发生致命错误）。' + #13#10#13#10 +
-        '请查看安装日志，或手动安装后重新运行本安装程序。', mbCriticalError, MB_OK);
-    5100:
-      MsgBox('.NET Framework 4.8 安装失败（错误 5100：本机不满足系统要求）。', mbCriticalError, MB_OK);
-  else
-    MsgBox(Format('.NET Framework 4.8 安装程序返回错误代码 %d。', [ResultCode]),
-      mbCriticalError, MB_OK);
-  end;
+  Result := HandleDotNet48ExitCode(ResultCode);
 end;
 
-{ 缺少 .NET Framework 4.8 时在「准备安装」页之前完成下载安装。 }
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-  if CurPageID <> wpReady then
-    Exit;
-
-  if IsDotNet48OrLater() then
-    Exit;
-
-  if MsgBox('AccuX 需要 .NET Framework 4.8 或更高版本，当前系统未检测到。' + #13#10#13#10 +
-      '是否立即联网下载并安装？（约 1.5 MB，需要网络连接）',
-      mbConfirmation, MB_YESNO) = IDNO then
-  begin
-    MsgBox('未安装 .NET Framework 4.8，AccuX 安装已中止。', mbError, MB_OK);
-    Result := False;
-    Exit;
-  end;
-
-  if not InstallDotNet48() then
-  begin
-    MsgBox('未能完成 .NET Framework 4.8 安装，AccuX 安装已中止。', mbCriticalError, MB_OK);
-    Result := False;
-  end;
-end;
-
-{ .NET Framework 安装要求重启时，先让用户重启再重新运行，避免注册到不完整运行时。 }
+{ 前置条件集中在 PrepareToInstall：交互/静默安装共用失败与重启出口。 }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
+  NeedsRestart := False;
+  if not DotNet48RebootRequired and not IsDotNet48OrLater() then
+  begin
+    if WizardSilent then
+      Result := '静默安装要求预先安装 .NET Framework 4.8 或更高版本。请部署该前置条件后重试。'
+    else if SuppressibleMsgBox('AccuX 需要 .NET Framework 4.8 或更高版本，当前系统未检测到。' + #13#10#13#10 +
+        '是否立即联网下载并安装？（引导程序约 1.5 MB，后续仍需下载运行时组件）',
+        mbConfirmation, MB_YESNO, IDNO) = IDNO then
+      Result := '未安装 .NET Framework 4.8，无法继续安装 AccuX。'
+    else if not InstallDotNet48() then
+      Result := PrerequisiteError;
+  end;
   if DotNet48RebootRequired then
   begin
     NeedsRestart := True;
     Result := '.NET Framework 4.8 安装需要重启计算机才能完成。' + #13#10#13#10 +
       '请重启后重新运行 AccuX 安装程序。';
   end;
+  if Result <> '' then
+    Log(Result);
 end;
 
-{ 使用 RegAsm 注册 COM 可见程序集（与 tools\register.ps1 使用同一 ProgId）。
-  32 位与 64 位分别注册，覆盖两个注册表视图。注册失败即中止安装并回滚。 }
-procedure RegisterComServer();
+procedure RegisterComView(const RegAsm, DllPath, ViewName: String);
 var
-  DllPath: String;
-  RegAsm: String;
   ResultCode: Integer;
 begin
-  DllPath := ExpandConstant('{app}\AccuX.AddIn.dll');
-
-  RegAsm := ExpandConstant('{dotnet4032}\RegAsm.exe');
-  if not FileExists(RegAsm) then
-    RaiseException('未找到 32 位 RegAsm.exe：' + RegAsm);
+  Log('注册 COM（' + ViewName + '）：' + DllPath);
   if not Exec(RegAsm, '/codebase "' + DllPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    RaiseException('无法启动 32 位 RegAsm.exe：' + RegAsm);
+    FailInstall('无法启动 RegAsm（' + ViewName + '）：' + SysErrorMessage(ResultCode));
+  Log(Format('RegAsm（%s）退出码：%d', [ViewName, ResultCode]));
   if ResultCode <> 0 then
-    RaiseException(Format('RegAsm（32 位）注册失败，退出码 %d。', [ResultCode]));
+    FailInstall(Format('RegAsm（%s）注册失败，退出码 %d；将恢复安装前状态。', [ViewName, ResultCode]));
+end;
 
+procedure RegisterComServer;
+var
+  RegAsm32, RegAsm64, DllPath: String;
+begin
+  DllPath := ExpandConstant('{app}\AccuX.AddIn.dll');
+  RegAsm32 := ExpandConstant('{dotnet4032}\RegAsm.exe');
+  if not FileExists(RegAsm32) then
+    FailInstall('未找到 32 位 RegAsm.exe：' + RegAsm32);
   if IsWin64 then
   begin
-    RegAsm := ExpandConstant('{dotnet4064}\RegAsm.exe');
-    if not FileExists(RegAsm) then
-      RaiseException('未找到 64 位 RegAsm.exe：' + RegAsm);
-    if not Exec(RegAsm, '/codebase "' + DllPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      RaiseException('无法启动 64 位 RegAsm.exe：' + RegAsm);
-    if ResultCode <> 0 then
-      RaiseException(Format('RegAsm（64 位）注册失败，退出码 %d。', [ResultCode]));
+    RegAsm64 := ExpandConstant('{dotnet4064}\RegAsm.exe');
+    if not FileExists(RegAsm64) then
+      FailInstall('未找到 64 位 RegAsm.exe：' + RegAsm64);
+    BackupComView(HKLM32, ExpandConstant('{syswow64}\reg.exe'));
+    BackupComView(HKLM64, ExpandConstant('{sys}\reg.exe'));
+  end
+  else
+    BackupComView(HKLM32, ExpandConstant('{sys}\reg.exe'));
+
+  { 必须在启动第一个 RegAsm 前标记：非零退出也可能已写入部分键。
+    保存整个专属键树，保留旧版本子键与旧 CodeBase，而不是盲目 /unregister。 }
+  ComRegistrationStarted := True;
+  RegisterComView(RegAsm32, DllPath, '32 位');
+  if IsWin64 then
+    RegisterComView(RegAsm64, DllPath, '64 位');
+end;
+
+function RegisterComAndGetKey(Param: String): String;
+begin
+  if not ComRegistrationComplete then
+  begin
+    RegisterComServer;
+    ComRegistrationComplete := True;
   end;
+  Result := Param;
+end;
+
+procedure DeinitializeSetup;
+var
+  I, ResultCode: Integer;
+  RecoveryFailed: Boolean;
+begin
+  if InstallCommitted then
+    Exit;
+  RecoveryFailed := False;
+  { Inno 原生撤销完成后再恢复旧文件，避免恢复的文件又被原生撤销删除。 }
+  for I := 0 to GetArrayLength(FileBackups) - 1 do
+  begin
+    if not ForceDirectories(ExtractFileDir(FileBackups[I].Destination)) or
+        not CopyFile(FileBackups[I].Backup, FileBackups[I].Destination, False) then
+    begin
+      Log('恢复旧文件失败：' + FileBackups[I].Destination);
+      RecoveryFailed := True;
+    end;
+  end;
+  if ComRegistrationStarted then
+    for I := GetArrayLength(RegistryBackups) - 1 downto 0 do
+    begin
+      if RegKeyExists(RegistryBackups[I].Root, RegistryBackups[I].Subkey) then
+        if not RegDeleteKeyIncludingSubkeys(RegistryBackups[I].Root, RegistryBackups[I].Subkey) then
+        begin
+          Log('清理本次 COM 注册失败：' + RegistryBackups[I].Subkey);
+          RecoveryFailed := True;
+        end;
+      if RegistryBackups[I].Existed then
+      begin
+        if not Exec(RegistryBackups[I].RegExe, 'import "' + RegistryBackups[I].Backup + '"',
+            '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+        begin
+          Log('无法启动 COM 注册恢复：' + SysErrorMessage(ResultCode));
+          RecoveryFailed := True;
+        end
+        else if ResultCode <> 0 then
+        begin
+          Log(Format('恢复 COM 注册失败（%d）：%s', [ResultCode, RegistryBackups[I].Subkey]));
+          RecoveryFailed := True;
+        end;
+      end;
+    end;
+  if RecoveryFailed then
+    ReportInstallError('安装失败后的恢复未完全成功，请根据安装日志修复或重新安装旧版本。')
+  else if (GetArrayLength(FileBackups) > 0) or ComRegistrationStarted then
+    Log('已恢复旧文件和 COM 注册。');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if CurStep = ssInstall then
+  begin
+    { 在任何文件被覆盖前完成全部备份。保持与 [Files] 清单一致。 }
+    BackupPackageFile('AccuX.AddIn.dll');
+    BackupPackageFile('AccuX.Core.dll');
+    BackupPackageFile('AccuX.Host.dll');
+    BackupPackageFile('AccuX.Modules.BasicFinance.dll');
+    BackupPackageFile('AccuX.Modules.Mark.dll');
+    BackupPackageFile('Newtonsoft.Json.dll');
+    BackupPackageFile('Microsoft.Office.Interop.Excel.dll');
+    BackupPackageFile('office.dll');
+    BackupPackageFile('Microsoft.Vbe.Interop.dll');
+    BackupPackageFile('config.sample.json');
+  end;
   if CurStep = ssPostInstall then
-    RegisterComServer();
+  begin
+    InstallCommitted := True;
+    Log('AccuX 文件安装与 COM 注册已提交。');
+  end;
 end;

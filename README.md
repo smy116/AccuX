@@ -40,6 +40,7 @@ AccuX.sln
 │  └─ AccuX.Modules.Mark.Tests
 ├─ tools/                       # register / unregister / make-icons
 ├─ installer/AccuX.iss          # Inno Setup 安装工程
+├─ .github/workflows/            # 推送构建与 tag 发布
 └─ docs/CompatibilityMatrix.md  # 兼容性矩阵
 ```
 
@@ -60,12 +61,17 @@ AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
 # 一条命令完成还原、构建、测试、边界校验
 powershell -ExecutionPolicy Bypass -File build.ps1
 
+# Release 构建（默认版本为 1.0）
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.0
+
 # 或手动
 dotnet build AccuX.sln -c Debug
 dotnet test AccuX.sln -c Debug
 ```
 
-当前状态：解决方案编译 0 警告 0 错误；单元测试 **172 项全部通过**（Core 63 项，BasicFinance 103 项，Mark 6 项）。
+当前状态：解决方案编译 0 警告 0 错误；单元测试 **173 项全部通过**（Core 63 项，BasicFinance 104 项，Mark 6 项）。
+
+构建脚本会优先使用 Visual Studio Office15 PIA，也支持通过 `-OfficePiaPath` 显式指定目录；找不到该目录时兼容使用 GAC 中的 15.0.0.0 PIA。构建结束会校验 `Microsoft.Office.Interop.Excel.dll`、`office.dll` 和 `Microsoft.Vbe.Interop.dll` 均已复制到 Release 输出目录。
 
 ## 开发期注册与 F5 调试
 
@@ -196,15 +202,28 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 ## 安装包（正式发布）
 
-使用 Inno Setup 编译 `installer/AccuX.iss`：
+使用 Inno Setup 6.7.3 编译 `installer/AccuX.iss`。先构建 Release 程序集，再执行安装器回归检查：
 
 ```
-ISCC.exe installer\AccuX.iss
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.0
+pwsh -NoProfile -File installer\Test-Installer.ps1
+ISCC.exe /DAccuXVersion=1.0 /DAccuXFileVersion=1.0.0.0 installer\AccuX.iss
 ```
 
-脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。
+脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.0.exe`，版本参数由 CI 传入时无需修改安装脚本。
 
-> 本机未安装 Inno Setup，因此安装工程已交付但**尚未编译验证**。编译前请先以 `Release` 配置构建解决方案，使 `src\*\bin\Release\net48\` 下存在所需程序集。
+## GitHub Actions 自动构建与发布
+
+`.github/workflows/build-release.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
+
+只有两段版本 tag 才会创建正式 Release：
+
+```powershell
+git tag v1.0
+git push origin v1.0
+```
+
+`v1.0` 会生成 `AccuXSetup-1.0.exe`、对应的 SHA-256 文件，并发布名为 `AccuX v1.0` 的 Release。`v1.0.0`、`v01.0` 和 `v1.0-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
 
 ## 人工验证清单
 
