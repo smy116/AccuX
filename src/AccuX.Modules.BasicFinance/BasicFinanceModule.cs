@@ -5,6 +5,7 @@ using AccuX.Core.Modules;
 using AccuX.Core.Operations;
 using AccuX.Modules.BasicFinance.AmountConversion;
 using AccuX.Modules.BasicFinance.ChineseAmount;
+using AccuX.Modules.BasicFinance.Comment;
 using AccuX.Modules.BasicFinance.Common;
 using AccuX.Modules.BasicFinance.Directory;
 using AccuX.Modules.BasicFinance.Rounding;
@@ -24,6 +25,7 @@ namespace AccuX.Modules.BasicFinance
 
         private IAccuXContext _context;
         private IUserPrompt _prompt;
+        private ICommentPrompt _commentPrompt;
         private CommandDefinition[] _commands = Array.Empty<CommandDefinition>();
 
         public string Id
@@ -36,13 +38,21 @@ namespace AccuX.Modules.BasicFinance
         /// </summary>
         public IUserPrompt PromptOverride { get; set; }
 
+        /// <summary>
+        /// 允许测试或其他宿主替换批注窗口交互；未设置时使用默认 WPF 实现。
+        /// </summary>
+        public ICommentPrompt CommentPromptOverride { get; set; }
+
         public void Initialize(IAccuXContext context)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
 
             var config = context.Config.GetSection("basicFinance", new BasicFinanceConfig());
-            _prompt = PromptOverride
-                ?? new WpfUserPrompt(context.Host, config.LargeSelectionWarning, config.RoundDigits);
+            var defaultPrompt = new WpfUserPrompt(context.Host, config.LargeSelectionWarning, config.RoundDigits);
+            _prompt = PromptOverride ?? defaultPrompt;
+            _commentPrompt = CommentPromptOverride
+                ?? PromptOverride as ICommentPrompt
+                ?? defaultPrompt;
 
             var stateOptions = new HostStateOptions
             {
@@ -58,7 +68,8 @@ namespace AccuX.Modules.BasicFinance
                 new AmountConversionCommand(_prompt, stateOptions).CreateDefinition(ModuleId),
                 new SelectionSumCommand(_prompt).CreateDefinition(ModuleId),
                 new ChineseAmountCommand(_prompt, stateOptions).CreateDefinition(ModuleId),
-                new DirectoryCommand().CreateDefinition(ModuleId)
+                new DirectoryCommand().CreateDefinition(ModuleId),
+                new CommentCommand(_commentPrompt).CreateDefinition(ModuleId)
             };
 
             context.Logger.Info("BasicFinance 模块初始化完成。");

@@ -19,7 +19,7 @@ namespace AccuX.Host
     /// V1 不对临时 RCW 显式调用 Marshal.ReleaseComObject（以实际兼容性验证为准），依赖 GC 回收。
     /// </para>
     /// </summary>
-    public sealed partial class ExcelRangeOperationHost : IRangeOperationHost, IWorkbookDirectoryHost
+    public sealed partial class ExcelRangeOperationHost : IRangeOperationHost, IWorkbookDirectoryHost, ICellCommentHost
     {
         private readonly Excel.Application _application;
         private readonly HostOptions _options;

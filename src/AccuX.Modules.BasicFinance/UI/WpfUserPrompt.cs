@@ -3,6 +3,7 @@ using System.Windows;
 using AccuX.Core.Operations;
 using AccuX.Modules.BasicFinance.AmountConversion;
 using AccuX.Modules.BasicFinance.Common;
+using AccuX.Modules.BasicFinance.Comment;
 using AccuX.Modules.BasicFinance.Rounding;
 using AccuX.Modules.BasicFinance.UI;
 
@@ -12,7 +13,7 @@ namespace AccuX.Modules.BasicFinance.UI
     /// 基于 WPF 的 <see cref="IUserPrompt"/> 实现。
     /// 只负责界面交互；所有财务计算由业务 Service 完成（规格 §20：WPF 不实现财务计算逻辑）。
     /// </summary>
-    public sealed class WpfUserPrompt : IUserPrompt
+    public sealed class WpfUserPrompt : IUserPrompt, ICommentPromptSession
     {
         private readonly IHostContext _host;
         private readonly long _largeSelectionWarning;
@@ -45,6 +46,22 @@ namespace AccuX.Modules.BasicFinance.UI
             var window = new AmountConversionView(OwnerHandle, viewModel);
             var accepted = window.ShowDialog();
             return accepted == true ? window.Options : null;
+        }
+
+        public CommentDialogResult AskComment(CommentContent existing)
+        {
+            return AskComment(existing, null);
+        }
+
+        public CommentDialogResult AskComment(
+            CommentContent existing,
+            Func<CommentDialogResult, CommentPromptSubmissionResult> submit)
+        {
+            var window = new CommentWindow(existing, OwnerHandle, submit);
+            var accepted = window.ShowDialog();
+            return accepted == true
+                ? window.Result
+                : CommentDialogResult.Cancelled();
         }
 
         public bool ConfirmLargeSelection(RangeTarget target)

@@ -1,8 +1,7 @@
 namespace AccuX.Core.Configuration
 {
     /// <summary>
-    /// 敏感配置保护抽象（DPAPI）。
-    /// V1 没有 API Key 等敏感配置，因此没有必须使用的场景，仅保留接口以备扩展。
+    /// 敏感数据保护抽象（默认实现为当前用户 DPAPI）。
     /// </summary>
     public interface ISecretProtector
     {

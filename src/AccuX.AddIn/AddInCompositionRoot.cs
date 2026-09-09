@@ -63,7 +63,7 @@ namespace AccuX.AddIn
             var host = new ExcelRangeOperationHost(_application, hostOptions);
             var pipeline = new RangeOperationPipeline(host, Logger);
 
-            var context = new ModuleContext(Config, Logger, host.Context, pipeline, AccuXVersion, host);
+            var context = new ModuleContext(Config, Logger, host.Context, pipeline, AccuXVersion, host, host);
             Dispatcher = new CommandDispatcher(context, Logger);
 
             // 用户交互统一由 WPF 实现；模块通过 IUserPrompt 使用。

@@ -39,6 +39,13 @@
                   getImage="GetImage"
                   screentip="生成目录"
                   supertip="在工作簿最前面生成可见工作表目录。" />
+          <button id="accux.basic.comment"
+                  label="批注助手"
+                  size="normal"
+                  onAction="OnAction"
+                  getImage="GetImage"
+                  screentip="批注助手"
+                  supertip="查看、保存或删除当前选区左上角单元格的批注。" />
         </group>
       </tab>
     </tabs>

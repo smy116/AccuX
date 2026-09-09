@@ -60,6 +60,8 @@ namespace AccuX.AddIn.Ribbon
                     return "uppercase.png";
                 case "accux.basic.directory":
                     return "directory.png";
+                case "accux.basic.comment":
+                    return "sum.png";
                 default:
                     return "round.png";
             }

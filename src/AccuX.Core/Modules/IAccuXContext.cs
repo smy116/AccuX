@@ -24,6 +24,9 @@ namespace AccuX.Core.Modules
         /// <summary>由 Host 实现的工作簿目录操作能力。</summary>
         IWorkbookDirectoryHost WorkbookDirectoryHost { get; }
 
+        /// <summary>由 Host 实现的传统单元格批注操作能力。</summary>
+        ICellCommentHost CellCommentHost { get; }
+
         /// <summary>AccuX 版本号，用于日志与提示。</summary>
         string AccuXVersion { get; }
     }
