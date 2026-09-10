@@ -147,7 +147,7 @@ namespace AccuX.Modules.Compare
 
         private static Button CreateButton(string text, RoutedEventHandler handler)
         {
-            var button = new Button { Content = text, Margin = new Thickness(6, 0, 0, 0) };
+            var button = new Button { Content = text, Width = 108, Height = 28, Margin = new Thickness(6, 0, 0, 0) };
             button.Click += handler;
             return button;
         }
