@@ -20,7 +20,8 @@ namespace AccuX.Core.Operations
             int columnCount,
             long cellCount,
             bool isMultiArea,
-            bool containsMergedCells)
+            bool containsMergedCells,
+            string identityToken = null)
         {
             WorkbookKey = workbookKey ?? throw new ArgumentNullException(nameof(workbookKey));
             WorksheetKey = worksheetKey ?? throw new ArgumentNullException(nameof(worksheetKey));
@@ -31,6 +32,7 @@ namespace AccuX.Core.Operations
             CellCount = cellCount;
             IsMultiArea = isMultiArea;
             ContainsMergedCells = containsMergedCells;
+            IdentityToken = identityToken ?? string.Empty;
         }
 
         /// <summary>由 Host 生成和解释的稳定 Workbook 身份信息。</summary>
@@ -56,6 +58,11 @@ namespace AccuX.Core.Operations
 
         /// <summary>是否包含合并单元格。</summary>
         public bool ContainsMergedCells { get; }
+
+        /// <summary>
+        /// Host 会话内的工作簿身份令牌。空值表示使用传统 WorkbookKey 解析。
+        /// </summary>
+        public string IdentityToken { get; }
 
         public override string ToString()
         {

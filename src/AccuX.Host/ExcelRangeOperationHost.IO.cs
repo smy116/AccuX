@@ -17,6 +17,16 @@ namespace AccuX.Host
         public RangeReadResult Read(RangeTarget target)
         {
             var worksheet = ResolveWorksheetOrThrow(target);
+            var workbook = ResolveWorkbook(target);
+            var isDate1904 = false;
+            try
+            {
+                isDate1904 = workbook != null && workbook.Date1904;
+            }
+            catch
+            {
+                // 兼容宿主取不到日期系统时按默认 1900 系统处理。
+            }
 
             Excel.Range range;
             try
@@ -66,6 +76,19 @@ namespace AccuX.Host
                     var formulaInfo = hasFormula ? BuildFormulaInfo(rawFormula) : null;
                     cell.Formula = formulaInfo;
 
+                    var normalizedValue = NormalizeValue(rawValue);
+                    if (IsDateFormat(numberFormat) && normalizedValue is decimal dateSerial)
+                    {
+                        try
+                        {
+                            normalizedValue = DateTime.FromOADate((double)dateSerial + (isDate1904 ? 1462d : 0d));
+                        }
+                        catch
+                        {
+                            // 不可转换时保留序列值，分类仍会将其标为日期。
+                        }
+                    }
+
                     var input = new CellClassificationInput
                     {
                         HasFormula = hasFormula,
@@ -73,7 +96,7 @@ namespace AccuX.Host
                         // Value2 对日期返回序列值；公式日期也必须根据 NumberFormat 排除出金额处理。
                         IsDate = IsDateFormat(numberFormat),
                         IsError = IsErrorValue(rawValue),
-                        Value = NormalizeValue(rawValue)
+                        Value = normalizedValue
                     };
 
                     // 公式结果若为数值但格式为日期，需按日期处理。

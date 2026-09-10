@@ -3,5 +3,12 @@
     "roundDigits": 2,
     "largeSelectionWarning": 100000,
     "maxProcessCells": 500000
+  },
+  "compare": {
+    "largeSelectionWarning": 100000,
+    "maxProcessCells": 500000,
+    "firstOnlyColor": "#FFFF66",
+    "secondOnlyColor": "#FF9999",
+    "sameColor": "#CCFFCC"
   }
 }

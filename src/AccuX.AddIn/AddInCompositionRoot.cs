@@ -11,6 +11,7 @@ using AccuX.Modules.BasicFinance;
 using AccuX.Modules.BasicFinance.Common;
 using AccuX.Modules.BasicFinance.UI;
 using AccuX.Modules.Mark;
+using AccuX.Modules.Compare;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace AccuX.AddIn
@@ -54,6 +55,15 @@ namespace AccuX.AddIn
 
             Config = new JsonConfigManager(JsonConfigManager.DefaultConfigPath);
             var basicConfig = Config.GetSection("basicFinance", new BasicFinanceConfig());
+            var compareConfig = Config.GetSection("compare", new CompareConfig());
+            if (compareConfig.LargeSelectionWarning <= 0)
+            {
+                compareConfig.LargeSelectionWarning = 100000;
+            }
+            if (compareConfig.MaxProcessCells <= 0)
+            {
+                compareConfig.MaxProcessCells = 500000;
+            }
 
             // Host 层：宿主差异与 COM 边界。
             var hostOptions = new HostOptions
@@ -67,6 +77,7 @@ namespace AccuX.AddIn
             var directoryHost = new ExcelWorkbookDirectoryHost(_application);
             var commentHost = new ExcelCellCommentHost(_application);
             var markHost = new ExcelCellMarkHost(_application);
+            var compareHost = new ExcelRegionCompareHost(_application, compareConfig.MaxProcessCells);
             var pipeline = new RangeOperationPipeline(rangeHost, Logger);
 
             var context = new ModuleContext(
@@ -77,7 +88,8 @@ namespace AccuX.AddIn
                 AccuXVersion,
                 directoryHost,
                 commentHost,
-                markHost);
+                markHost,
+                compareHost);
             Dispatcher = new CommandDispatcher(context, Logger);
 
             // 用户交互统一由 WPF 实现；模块通过 IUserPrompt 使用。
@@ -90,6 +102,9 @@ namespace AccuX.AddIn
 
             var mark = new MarkModule();
             _moduleRegistry.Register(mark, context, Dispatcher);
+
+            var compare = new RegionCompareModule();
+            _moduleRegistry.Register(compare, context, Dispatcher);
 
             Logger.Info("AccuX 启动完成，已注册命令数：" + Dispatcher.Commands.Count);
         }

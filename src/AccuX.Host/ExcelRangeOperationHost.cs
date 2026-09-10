@@ -19,12 +19,22 @@ namespace AccuX.Host
     public sealed partial class ExcelRangeOperationHost : ExcelHostBase, IRangeOperationHost
     {
         private readonly HostOptions _options;
+        private readonly Func<RangeTarget, Excel.Workbook> _workbookResolver;
 
-        public ExcelRangeOperationHost(Excel.Application application, HostOptions options = null)
+        public ExcelRangeOperationHost(
+            Excel.Application application,
+            HostOptions options = null,
+            Func<RangeTarget, Excel.Workbook> workbookResolver = null)
             : base(application)
         {
             _options = options ?? new HostOptions();
+            _workbookResolver = workbookResolver;
             Context = HostDetector.Detect(application);
+        }
+
+        protected override Excel.Workbook ResolveWorkbook(RangeTarget target)
+        {
+            return _workbookResolver == null ? base.ResolveWorkbook(target) : _workbookResolver(target);
         }
 
         public HostOptions Options
@@ -76,7 +86,7 @@ namespace AccuX.Host
             }
 
             var workbookKey = BuildWorkbookKey(workbook);
-            var worksheetKey = SafeWorksheetName(worksheet);
+            var worksheetKey = BuildWorksheetKey(worksheet);
             var worksheetName = SafeWorksheetName(worksheet);
             var containsMerged = DetectMergedCells(selection, rowCount, columnCount);
 

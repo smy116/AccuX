@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AccuX.Modules.Compare</RootNamespace>
+    <AssemblyName>AccuX.Modules.Compare</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <Description>AccuX 区域存在对比模块。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AccuX.Core\AccuX.Core.csproj" />
+  </ItemGroup>
+
+</Project>

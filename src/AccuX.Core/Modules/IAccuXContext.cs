@@ -30,6 +30,9 @@ namespace AccuX.Core.Modules
         /// <summary>由 Host 实现的当前选区可见单元格标记能力。</summary>
         ICellMarkHost CellMarkHost { get; }
 
+        /// <summary>由 Host 实现的跨区域存在对比能力。</summary>
+        IRegionCompareHost RegionCompareHost { get; }
+
         /// <summary>AccuX 版本号，用于日志与提示。</summary>
         string AccuXVersion { get; }
     }

@@ -18,7 +18,8 @@ namespace AccuX.Core.Modules
             string accuXVersion,
             IWorkbookDirectoryHost workbookDirectoryHost = null,
             ICellCommentHost cellCommentHost = null,
-            ICellMarkHost cellMarkHost = null)
+            ICellMarkHost cellMarkHost = null,
+            IRegionCompareHost regionCompareHost = null)
         {
             Config = config ?? throw new ArgumentNullException(nameof(config));
             Logger = logger ?? NullLogger.Instance;
@@ -27,6 +28,7 @@ namespace AccuX.Core.Modules
             WorkbookDirectoryHost = workbookDirectoryHost;
             CellCommentHost = cellCommentHost;
             CellMarkHost = cellMarkHost;
+            RegionCompareHost = regionCompareHost;
             AccuXVersion = accuXVersion ?? string.Empty;
         }
 
@@ -43,6 +45,8 @@ namespace AccuX.Core.Modules
         public ICellCommentHost CellCommentHost { get; }
 
         public ICellMarkHost CellMarkHost { get; }
+
+        public IRegionCompareHost RegionCompareHost { get; }
 
         public string AccuXVersion { get; }
     }

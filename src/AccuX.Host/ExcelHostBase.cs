@@ -67,7 +67,7 @@ namespace AccuX.Host
             }
         }
 
-        protected Excel.Workbook ResolveWorkbook(RangeTarget target)
+        protected virtual Excel.Workbook ResolveWorkbook(RangeTarget target)
         {
             if (target == null || string.IsNullOrEmpty(target.WorkbookKey))
             {
@@ -94,7 +94,8 @@ namespace AccuX.Host
 
             foreach (Excel.Worksheet sheet in workbook.Worksheets)
             {
-                if (string.Equals(SafeWorksheetName(sheet), target.WorksheetKey, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(SafeWorksheetName(sheet), target.WorksheetKey, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(BuildWorksheetKey(sheet), target.WorksheetKey, StringComparison.OrdinalIgnoreCase))
                 {
                     return sheet;
                 }
@@ -155,6 +156,29 @@ namespace AccuX.Host
             {
                 return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// 工作表身份优先使用 CodeName，避免删除后新建同名工作表误写原目标；
+        /// WPS 或兼容宿主不提供 CodeName 时回退到名称。
+        /// </summary>
+        protected static string BuildWorksheetKey(Excel.Worksheet worksheet)
+        {
+            var name = SafeWorksheetName(worksheet);
+            try
+            {
+                var codeName = worksheet.CodeName;
+                if (!string.IsNullOrWhiteSpace(codeName))
+                {
+                    return codeName + "|" + name;
+                }
+            }
+            catch
+            {
+                // 兼容宿主可能没有 CodeName 属性。
+            }
+
+            return name;
         }
 
         protected static string SafeAddress(Excel.Range range)

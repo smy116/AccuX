@@ -18,6 +18,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccuX.Core.Tests", "tests\A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccuX.Modules.BasicFinance.Tests", "tests\AccuX.Modules.BasicFinance.Tests\AccuX.Modules.BasicFinance.Tests.csproj", "{A1000000-0000-0000-0000-000000000006}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccuX.Modules.Compare", "src\AccuX.Modules.Compare\AccuX.Modules.Compare.csproj", "{55AEE2FF-5C14-4941-9E89-B1D99E438ED1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccuX.Modules.Compare.Tests", "tests\AccuX.Modules.Compare.Tests\AccuX.Modules.Compare.Tests.csproj", "{52FAD8F2-DFB4-4E51-8C98-519296BB3898}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -56,6 +60,14 @@ Global
 		{A1000000-0000-0000-0000-000000000008}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1000000-0000-0000-0000-000000000008}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1000000-0000-0000-0000-000000000008}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55AEE2FF-5C14-4941-9E89-B1D99E438ED1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55AEE2FF-5C14-4941-9E89-B1D99E438ED1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55AEE2FF-5C14-4941-9E89-B1D99E438ED1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55AEE2FF-5C14-4941-9E89-B1D99E438ED1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{52FAD8F2-DFB4-4E51-8C98-519296BB3898}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{52FAD8F2-DFB4-4E51-8C98-519296BB3898}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{52FAD8F2-DFB4-4E51-8C98-519296BB3898}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{52FAD8F2-DFB4-4E51-8C98-519296BB3898}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
