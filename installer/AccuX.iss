@@ -24,7 +24,7 @@
 #define AccuXFileVersion "1.0.0.0"
 #endif
 #ifndef AccuXOutputBaseFilename
-#define AccuXOutputBaseFilename "AccuXSetup-{#AccuXVersion}"
+#define AccuXOutputBaseFilename "AccuXSetup-" + AccuXVersion
 #endif
 #define AccuXProgId "AccuX.AddIn.Connect"
 #define AccuXFriendlyName "AccuX"
