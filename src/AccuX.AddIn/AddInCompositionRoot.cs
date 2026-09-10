@@ -150,11 +150,11 @@ namespace AccuX.AddIn
                     return attribute.InformationalVersion;
                 }
 
-                return assembly.GetName().Version?.ToString() ?? "1.0.0";
+                return assembly.GetName().Version?.ToString() ?? "1.1.0";
             }
             catch
             {
-                return "1.0.0";
+                return "1.1.0";
             }
         }
     }

@@ -6,7 +6,7 @@
 & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer\AccuX.iss
 ```
 
-正式版本使用两段版本号，例如 `v1.0`。CI 会把 tag 转换为 `1.0`，并通过 Inno 预处理参数生成 `AccuXSetup-1.0.exe`；程序集和安装器文件版本使用 `1.0.0.0`。
+正式版本使用两段版本号，例如 `v1.1`。CI 会把 tag 转换为 `1.1`，并通过 Inno 预处理参数生成 `AccuXSetup-1.1.exe`；程序集和安装器文件版本使用 `1.1.0.0`。
 
 ## 前置条件
 

@@ -86,7 +86,7 @@
         <group id="AccuXCompareGroup" label="对比">
           <button id="accux.compare.exists"
                   label="区域对比"
-                  size="normal"
+                  size="large"
                   onAction="OnAction"
                   getImage="GetImage"
                   screentip="区域对比"

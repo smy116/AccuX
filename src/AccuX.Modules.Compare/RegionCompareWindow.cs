@@ -63,7 +63,7 @@ namespace AccuX.Modules.Compare
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) });
 
             var selectionPanel = new GroupBox { Header = "区域", Padding = new Thickness(10), Margin = new Thickness(0, 0, 0, 10) };
             var selectionGrid = new Grid();
@@ -105,18 +105,28 @@ namespace AccuX.Modules.Compare
             _sameList = CreateResultList("相同项", 2, resultGrid);
             Grid.SetRow(resultGrid, 2); root.Children.Add(resultGrid);
 
-            var footer = new Grid { Margin = new Thickness(0, 10, 0, 0), MinHeight = 32 };
-            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var footer = new Border
+            {
+                Margin = new Thickness(0, 8, 0, 0),
+                Padding = new Thickness(0, 4, 0, 0),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                BorderBrush = System.Windows.Media.Brushes.LightGray,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            var footerGrid = new Grid();
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _summaryText = new TextBlock { Text = "请分别捕获两个区域后点击“对比”。", VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(_summaryText, 0); footer.Children.Add(_summaryText);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            Grid.SetColumn(_summaryText, 0); footerGrid.Children.Add(_summaryText);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             buttons.Children.Add(CreateButton("对比", Compare));
             buttons.Children.Add(CreateButton("标记不同", MarkDifferent));
             buttons.Children.Add(CreateButton("标记相同", MarkSame));
             buttons.Children.Add(CreateButton("清除标记", ClearMarks));
             buttons.Children.Add(CreateButton("导出结果", Export));
-            Grid.SetColumn(buttons, 1);
+            Grid.SetColumn(buttons, 1); footerGrid.Children.Add(buttons);
+            footer.Child = footerGrid;
             Grid.SetRow(footer, 3); root.Children.Add(footer);
             Content = root;
         }
@@ -137,7 +147,7 @@ namespace AccuX.Modules.Compare
 
         private static Button CreateButton(string text, RoutedEventHandler handler)
         {
-            var button = new Button { Content = text, Width = 88, Height = 28, Margin = new Thickness(6, 0, 0, 0) };
+            var button = new Button { Content = text, Margin = new Thickness(6, 0, 0, 0) };
             button.Click += handler;
             return button;
         }

@@ -63,8 +63,8 @@ AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
 # 一条命令完成还原、构建、测试、边界校验
 powershell -ExecutionPolicy Bypass -File build.ps1
 
-# Release 构建（默认版本为 1.0）
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.0
+# Release 构建（默认版本为 1.1）
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
 
 # 或手动
 dotnet build AccuX.sln -c Debug
@@ -209,12 +209,12 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 使用 Inno Setup 6.7.3 编译 `installer/AccuX.iss`。先构建 Release 程序集，再执行安装器回归检查：
 
 ```
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.0
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
 pwsh -NoProfile -File installer\Test-Installer.ps1
-ISCC.exe /DAccuXVersion=1.0 /DAccuXFileVersion=1.0.0.0 installer\AccuX.iss
+ISCC.exe /DAccuXVersion=1.1 /DAccuXFileVersion=1.1.0.0 installer\AccuX.iss
 ```
 
-脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.0.exe`，版本参数由 CI 传入时无需修改安装脚本。
+脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.1.exe`，版本参数由 CI 传入时无需修改安装脚本。
 
 ## GitHub Actions 自动构建与发布
 
@@ -223,11 +223,11 @@ ISCC.exe /DAccuXVersion=1.0 /DAccuXFileVersion=1.0.0.0 installer\AccuX.iss
 只有两段版本 tag 才会创建正式 Release：
 
 ```powershell
-git tag v1.0
-git push origin v1.0
+git tag v1.1
+git push origin v1.1
 ```
 
-`v1.0` 会生成 `AccuXSetup-1.0.exe`、对应的 SHA-256 文件，并发布名为 `AccuX v1.0` 的 Release。`v1.0.0`、`v01.0` 和 `v1.0-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+`v1.1` 会生成 `AccuXSetup-1.1.exe`、对应的 SHA-256 文件，并发布名为 `AccuX v1.1` 的 Release。`v1.1.0`、`v01.1` 和 `v1.1-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
 
 ## 人工验证清单
 

@@ -10,7 +10,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| AccuX 版本 | 1.0 |
+| AccuX 版本 | 1.1 |
 | 开发机 Office | Microsoft Office 16（Excel x64，路径 `C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE`） |
 | 开发机 WPS | WPS Office 12.1.0.28488（ET x64；本机 `Excel.Application` ProgID/CLSID 由 WPS 接管，COM `Excel.Application` 与 `Excel.Application.16` 均解析到 `et.exe`） |
 | 目标框架 | .NET Framework 4.8 |

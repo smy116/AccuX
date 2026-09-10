@@ -12,14 +12,14 @@
     <Product>AccuX</Product>
     <Authors>AccuX</Authors>
     <!--
-      The public release tag is two-part (for example v1.0). The CLR still
+      The public release tag is two-part (for example v1.1). The CLR still
       receives a four-part assembly/file version through build.ps1 when a
-      release is built (1.0.0.0).
+      release is built (1.1.0.0).
     -->
-    <Version Condition="'$(Version)' == ''">1.0</Version>
-    <FileVersion Condition="'$(FileVersion)' == ''">1.0.0.0</FileVersion>
-    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.0.0.0</AssemblyVersion>
-    <AccuXVersion Condition="'$(AccuXVersion)' == ''">1.0</AccuXVersion>
+    <Version Condition="'$(Version)' == ''">1.1</Version>
+    <FileVersion Condition="'$(FileVersion)' == ''">1.1.0.0</FileVersion>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.1.0.0</AssemblyVersion>
+    <AccuXVersion Condition="'$(AccuXVersion)' == ''">1.1</AccuXVersion>
 
     <!--
       CI supplies OfficePiaPath explicitly. On a developer machine prefer the

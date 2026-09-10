@@ -2,11 +2,11 @@
 #
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File build.ps1
-#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.0
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
-    [string]$Version = '1.0',
+    [string]$Version = '1.1',
     [string]$OfficePiaPath = '',
     [switch]$SkipTests
 )
@@ -19,7 +19,7 @@ function Assert-TwoPartVersion {
     param([Parameter(Mandatory)][string]$Value)
 
     if ($Value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-        throw "版本必须是两段数字且不能有前导零，例如 1.0；实际值：$Value"
+        throw "版本必须是两段数字且不能有前导零，例如 1.1；实际值：$Value"
     }
 
     $parts = $Value.Split('.')

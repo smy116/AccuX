@@ -153,11 +153,11 @@ function New-AccuXTextIcon {
     $graphics.Clear($BackgroundColor)
 
     $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $font = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
     $format = New-Object System.Drawing.StringFormat
     $format.Alignment = [System.Drawing.StringAlignment]::Center
     $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $graphics.DrawString($Symbol, $font, $whiteBrush, (New-Object System.Drawing.RectangleF(2, 1, 28, 29)), $format)
+    $graphics.DrawString($Symbol, $font, $whiteBrush, (New-Object System.Drawing.RectangleF(0, 0, 32, 32)), $format)
 
     $format.Dispose()
     $font.Dispose()

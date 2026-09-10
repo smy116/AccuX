@@ -71,7 +71,7 @@ namespace AccuX.AddIn.Ribbon
                 case "accux.mark.blue":
                     return "mark-blue.png";
                 case "accux.compare.exists":
-                    return "sum.png";
+                    return "compare.png";
                 default:
                     return "round.png";
             }
