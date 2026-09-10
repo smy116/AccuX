@@ -343,6 +343,8 @@ V1 Ribbon 由 `AccuX.AddIn` 的静态 CustomUI XML 定义。
 4. Ribbon callback 统一进入 `CommandDispatcher`；
 5. 不让 Module 暴露大量自己的 COM callback。
 6. 所有 Ribbon 可点击按钮必须配置图标；图标资源统一由 AccuX.AddIn 管理，不得由业务 Module 自行加载 Ribbon 图标。
+7. Ribbon 各功能组的按钮布局高度不得超过 2 行；多按钮组使用纵向 `box` 包含最多两个横向行 `box`，避免宿主默认排列成 3 行。新增按钮优先横向扩展或拆分功能组，不得增加第三行；此限制指按钮布局行数，宿主 Ribbon 的实际像素高度由 Excel / WPS 控制。
+8. 基础功能组固定采用 2 行、3 列布局：第一行为“一键舍入、金额折合、选区求和”，第二行为“金额大写、生成目录、批注助手”，按钮统一使用 `size="normal"`。布局变更后需分别在 Excel / WPS 验证显示。
 
 ---
 
@@ -1225,6 +1227,7 @@ Agent 在宣布模块完成前，逐项检查：
 [ ] 没有新增动态插件扫描 / 反射加载 / 热加载框架
 [ ] 新 Module 已由 AddIn 编译期引用并显式注册
 [ ] Ribbon 使用静态 XML + Command ID 映射
+[ ] Ribbon 各功能组按钮布局不超过 2 行，基础功能组保持 2 行、3 列
 ```
 
 ### 23.2 Range 与数据安全

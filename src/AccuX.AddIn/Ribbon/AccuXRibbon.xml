@@ -4,48 +4,54 @@
     <tabs>
       <tab id="AccuXTab" label="AccuX" insertAfterMso="TabHome">
         <group id="AccuXBasicFinanceGroup" label="基础功能">
-          <button id="accux.basic.round"
-                  label="一键舍入"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="一键舍入"
-                  supertip="对当前选区金额统一四舍五入，可自定义小数位。" />
-          <button id="accux.basic.convert"
-                  label="金额折合"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="金额折合"
-                  supertip="按除百 / 除千 / 除万对选区金额进行折合。" />
-          <button id="accux.basic.sum"
-                  label="选区求和"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="选区求和"
-                  supertip="计算当前选区内可见数字合计，四舍五入到2位并复制到剪切板。" />
-          <button id="accux.basic.uppercase"
-                  label="金额大写"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="金额大写"
-                  supertip="将当前选区金额转换为中文大写。" />
-          <button id="accux.basic.directory"
-                  label="生成目录"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="生成目录"
-                  supertip="在工作簿最前面生成可见工作表目录。" />
-          <button id="accux.basic.comment"
-                  label="批注助手"
-                  size="normal"
-                  onAction="OnAction"
-                  getImage="GetImage"
-                  screentip="批注助手"
-                  supertip="查看、保存或删除当前选区左上角单元格的批注。" />
+          <box id="AccuXBasicFinanceLayout" boxStyle="vertical">
+            <box id="AccuXBasicFinanceTopRow" boxStyle="horizontal">
+              <button id="accux.basic.round"
+                      label="一键舍入"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="一键舍入"
+                      supertip="对当前选区金额统一四舍五入，可自定义小数位。" />
+              <button id="accux.basic.convert"
+                      label="金额折合"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="金额折合"
+                      supertip="按除百 / 除千 / 除万对选区金额进行折合。" />
+              <button id="accux.basic.sum"
+                      label="选区求和"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="选区求和"
+                      supertip="计算当前选区内可见数字合计，四舍五入到2位并复制到剪切板。" />
+            </box>
+            <box id="AccuXBasicFinanceBottomRow" boxStyle="horizontal">
+              <button id="accux.basic.uppercase"
+                      label="金额大写"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="金额大写"
+                      supertip="将当前选区金额转换为中文大写。" />
+              <button id="accux.basic.directory"
+                      label="生成目录"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="生成目录"
+                      supertip="在工作簿最前面生成可见工作表目录。" />
+              <button id="accux.basic.comment"
+                      label="批注助手"
+                      size="normal"
+                      onAction="OnAction"
+                      getImage="GetImage"
+                      screentip="批注助手"
+                      supertip="查看、保存或删除当前选区左上角单元格的批注。" />
+            </box>
+          </box>
         </group>
         <group id="AccuXMarkGroup" label="标记">
           <box id="AccuXMarkLayout" boxStyle="vertical">

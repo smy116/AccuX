@@ -1,6 +1,7 @@
-﻿# Generates AccuX Ribbon icons: 32x32 PNG, unified visual language
-# (dark blue rounded background + white symbol).
-# Compact icon set for normal-size Ribbon buttons.
+﻿# Generates AccuX Ribbon icons: 32x32 PNG, based on the approved AI concept board.
+# The final assets keep the concept's bold keyline, white surfaces, and vivid
+# accents, while the full canvas remains a 99% transparent pure-white matte
+# for WPS/Office compatibility.
 param(
     [string]$OutputDirectory = "$PSScriptRoot\..\src\AccuX.AddIn\Resources"
 )
@@ -11,167 +12,393 @@ if (-not (Test-Path $OutputDirectory)) {
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 }
 
+$script:KeylineColor = [System.Drawing.Color]::FromArgb(255, 18, 26, 35)
+$script:WhiteColor = [System.Drawing.Color]::FromArgb(255, 249, 251, 253)
+$script:BlueColor = [System.Drawing.Color]::FromArgb(255, 42, 137, 245)
+$script:CyanColor = [System.Drawing.Color]::FromArgb(255, 56, 216, 222)
+$script:GreenColor = [System.Drawing.Color]::FromArgb(255, 53, 211, 121)
+$script:RedColor = [System.Drawing.Color]::FromArgb(255, 255, 76, 76)
+$script:YellowColor = [System.Drawing.Color]::FromArgb(255, 255, 209, 43)
+$script:SlateColor = [System.Drawing.Color]::FromArgb(255, 88, 103, 116)
+
+function New-PointF {
+    param([float]$X, [float]$Y)
+    return [System.Drawing.PointF]::new($X, $Y)
+}
+
+function New-PolygonPath {
+    param([System.Drawing.PointF[]]$Points)
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddPolygon($Points)
+    return $path
+}
+
+function New-RoundedRectanglePath {
+    param([float]$X, [float]$Y, [float]$Width, [float]$Height, [float]$Radius)
+    $diameter = $Radius * 2
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc($X, $Y, $diameter, $diameter, 180, 90)
+    $path.AddArc($X + $Width - $diameter, $Y, $diameter, $diameter, 270, 90)
+    $path.AddArc($X + $Width - $diameter, $Y + $Height - $diameter, $diameter, $diameter, 0, 90)
+    $path.AddArc($X, $Y + $Height - $diameter, $diameter, $diameter, 90, 90)
+    $path.CloseFigure()
+    return $path
+}
+
+function New-DocumentPath {
+    param([float]$X, [float]$Y, [float]$Width, [float]$Height, [float]$Fold)
+    $points = [System.Drawing.PointF[]]@(
+        (New-PointF $X $Y),
+        (New-PointF ($X + $Width - $Fold) $Y),
+        (New-PointF ($X + $Width) ($Y + $Fold)),
+        (New-PointF ($X + $Width) ($Y + $Height)),
+        (New-PointF $X ($Y + $Height))
+    )
+    return New-PolygonPath $points
+}
+
+function New-ChatPath {
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc(5, 6, 22, 17, 180, 90)
+    $path.AddArc(15, 6, 12, 17, 270, 90)
+    $path.AddArc(15, 11, 12, 12, 0, 90)
+    $path.AddLines([System.Drawing.PointF[]]@(
+        (New-PointF 16 23),
+        (New-PointF 10 28),
+        (New-PointF 11 22)
+    ))
+    $path.AddArc(5, 11, 12, 12, 90, 90)
+    $path.CloseFigure()
+    return $path
+}
+
+function Draw-OutlinedLine {
+    param($Graphics, $EdgePen, $ForegroundPen, [float]$X1, [float]$Y1, [float]$X2, [float]$Y2)
+    $Graphics.DrawLine($EdgePen, $X1, $Y1, $X2, $Y2)
+    $Graphics.DrawLine($ForegroundPen, $X1, $Y1, $X2, $Y2)
+}
+
+function Draw-OutlinedArc {
+    param($Graphics, $EdgePen, $ForegroundPen, [float]$X, [float]$Y, [float]$Width, [float]$Height, [float]$StartAngle, [float]$SweepAngle)
+    $Graphics.DrawArc($EdgePen, $X, $Y, $Width, $Height, $StartAngle, $SweepAngle)
+    $Graphics.DrawArc($ForegroundPen, $X, $Y, $Width, $Height, $StartAngle, $SweepAngle)
+}
+
+function Fill-OutlinedPath {
+    param($Graphics, $EdgePen, $ForegroundBrush, $Path)
+    $Graphics.FillPath($ForegroundBrush, $Path)
+    $Graphics.DrawPath($EdgePen, $Path)
+}
+
+function Draw-OutlinedPath {
+    param($Graphics, $EdgePen, $ForegroundPen, $Path)
+    $Graphics.DrawPath($EdgePen, $Path)
+    $Graphics.DrawPath($ForegroundPen, $Path)
+}
+
+function Fill-OutlinedEllipse {
+    param($Graphics, $EdgeBrush, $ForegroundBrush, [float]$X, [float]$Y, [float]$Width, [float]$Height)
+    $Graphics.FillEllipse($EdgeBrush, $X, $Y, $Width, $Height)
+    $Graphics.FillEllipse($ForegroundBrush, $X + 0.75, $Y + 0.75, $Width - 1.5, $Height - 1.5)
+}
+
+function Fill-OutlinedRectangle {
+    param($Graphics, $EdgeBrush, $ForegroundBrush, [float]$X, [float]$Y, [float]$Width, [float]$Height)
+    $Graphics.FillRectangle($EdgeBrush, $X, $Y, $Width, $Height)
+    $Graphics.FillRectangle($ForegroundBrush, $X + 0.75, $Y + 0.75, $Width - 1.5, $Height - 1.5)
+}
+
+function Draw-OutlinedText {
+    param($Graphics, [string]$Text, $Font, $OutlineBrush, $ForegroundBrush, [System.Drawing.RectangleF]$Rectangle, $Format)
+    foreach ($dx in @(-1, 0, 1)) {
+        foreach ($dy in @(-1, 0, 1)) {
+            if ($dx -ne 0 -or $dy -ne 0) {
+                $shadowRectangle = [System.Drawing.RectangleF]::new(
+                    $Rectangle.X + $dx,
+                    $Rectangle.Y + $dy,
+                    $Rectangle.Width,
+                    $Rectangle.Height)
+                $Graphics.DrawString($Text, $Font, $OutlineBrush, $shadowRectangle, $Format)
+            }
+        }
+    }
+    $Graphics.DrawString($Text, $Font, $ForegroundBrush, $Rectangle, $Format)
+}
+
+function New-IconPalette {
+    $edgePen = New-Object System.Drawing.Pen($script:KeylineColor, 3.2)
+    $lineEdgePen = New-Object System.Drawing.Pen($script:KeylineColor, 4.6)
+    $whitePen = New-Object System.Drawing.Pen($script:WhiteColor, 2.45)
+    $bluePen = New-Object System.Drawing.Pen($script:BlueColor, 2.55)
+    $cyanPen = New-Object System.Drawing.Pen($script:CyanColor, 2.55)
+    $greenPen = New-Object System.Drawing.Pen($script:GreenColor, 2.55)
+    $redPen = New-Object System.Drawing.Pen($script:RedColor, 2.55)
+    $yellowPen = New-Object System.Drawing.Pen($script:YellowColor, 2.55)
+    $slatePen = New-Object System.Drawing.Pen($script:SlateColor, 2.1)
+
+    foreach ($pen in @($lineEdgePen, $whitePen, $bluePen, $cyanPen, $greenPen, $redPen, $yellowPen)) {
+        $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    }
+
+    return [pscustomobject]@{
+        EdgePen = $edgePen
+        LineEdgePen = $lineEdgePen
+        WhitePen = $whitePen
+        BluePen = $bluePen
+        CyanPen = $cyanPen
+        GreenPen = $greenPen
+        RedPen = $redPen
+        YellowPen = $yellowPen
+        SlatePen = $slatePen
+        EdgeBrush = New-Object System.Drawing.SolidBrush($script:KeylineColor)
+        WhiteBrush = New-Object System.Drawing.SolidBrush($script:WhiteColor)
+        BlueBrush = New-Object System.Drawing.SolidBrush($script:BlueColor)
+        CyanBrush = New-Object System.Drawing.SolidBrush($script:CyanColor)
+        GreenBrush = New-Object System.Drawing.SolidBrush($script:GreenColor)
+        RedBrush = New-Object System.Drawing.SolidBrush($script:RedColor)
+        YellowBrush = New-Object System.Drawing.SolidBrush($script:YellowColor)
+        SlateBrush = New-Object System.Drawing.SolidBrush($script:SlateColor)
+    }
+}
+
+function Dispose-IconPalette {
+    param($Palette)
+    foreach ($property in $Palette.PSObject.Properties) {
+        if ($property.Value -is [System.IDisposable]) {
+            $property.Value.Dispose()
+        }
+    }
+}
+
 function New-AccuXIcon {
     param(
         [string]$Path,
-        [System.Drawing.Color]$AccentColor,
         [scriptblock]$DrawSymbol
     )
 
     $size = 32
-    # WPS 通过 IPictureDisp 显示图标时不会稳定保留 PNG Alpha，
-    # 透明像素会被垫成灰色方块。使用 24bpp 不透明画布避免灰边。
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $graphics.Clear([System.Drawing.Color]::White)
+    $graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+    $graphics.Clear([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
 
-    # Fill the entire canvas so WPS does not show a gray/white matte around
-    # transparent or rounded corners in the Ribbon.
-    $background = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 20, 49, 70))
-    $graphics.FillRectangle($background, 0, 0, $size, $size)
+    # 3/255 ≈ 1% opacity, i.e. 99% transparency. SourceCopy preserves
+    # the non-zero matte instead of rounding it back to Alpha=0.
+    $matte = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(3, 255, 255, 255))
+    $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $graphics.FillRectangle($matte, 0, 0, $size, $size)
+    $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
 
-    $white = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 246, 250, 252), 2.5)
-    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 246, 250, 252))
-    $accent = New-Object System.Drawing.Pen($AccentColor, 2.5)
-    $accentBrush = New-Object System.Drawing.SolidBrush($AccentColor)
-    $white.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $white.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $accent.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $accent.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-
-    & $DrawSymbol $graphics $white $whiteBrush $accent $accentBrush
+    $palette = New-IconPalette
+    & $DrawSymbol $graphics $palette
 
     $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
 
-    $accentBrush.Dispose()
-    $accent.Dispose()
-    $whiteBrush.Dispose()
-    $white.Dispose()
-    $background.Dispose()
+    Dispose-IconPalette $palette
+    $matte.Dispose()
     $graphics.Dispose()
     $bitmap.Dispose()
 }
 
-# Rounding: precision dial with a highlighted rounding arrow.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'round.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 255, 193, 87)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    $g.DrawArc($accent, 7, 7, 18, 18, 35, 275)
-    $g.DrawLine($accent, 24, 8, 24, 13)
-    $g.DrawLine($accent, 24, 8, 19, 9)
-    $g.DrawLine($pen, 11, 14, 15, 14)
-    $g.FillEllipse($accentBrush, 16.5, 12.5, 3, 3)
-    $g.DrawLine($pen, 20, 14, 22, 14)
-    $g.DrawLine($pen, 11, 19, 22, 19)
+function Draw-Highlighter {
+    param($Graphics, $Palette, $AccentBrush, $AccentPen)
+
+    $body = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 14 4),
+        (New-PointF 28 18),
+        (New-PointF 21 25),
+        (New-PointF 7 11)
+    ))
+    Fill-OutlinedPath $Graphics $Palette.EdgePen $AccentBrush $body
+    $body.Dispose()
+
+    Draw-OutlinedLine $Graphics $Palette.LineEdgePen $Palette.WhitePen 14 7 23 16
+
+    $collar = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 7 11),
+        (New-PointF 13 17),
+        (New-PointF 8 22),
+        (New-PointF 2 16)
+    ))
+    Fill-OutlinedPath $Graphics $Palette.EdgePen $Palette.WhiteBrush $collar
+    $collar.Dispose()
+
+    $tip = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 2 16),
+        (New-PointF 8 22),
+        (New-PointF 3 27),
+        (New-PointF 1 23)
+    ))
+    Fill-OutlinedPath $Graphics $Palette.EdgePen $AccentBrush $tip
+    $tip.Dispose()
+
+    Draw-OutlinedLine $Graphics $Palette.LineEdgePen $AccentPen 4 28 27 28
 }
 
-# Amount conversion: two clean, opposing transfer arrows.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'convert.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 99, 211, 238)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    $g.DrawLine($accent, 8, 11, 23, 11)
-    $g.DrawLine($accent, 18, 7, 23, 11)
-    $g.DrawLine($accent, 18, 15, 23, 11)
-    $g.DrawLine($pen, 24, 21, 9, 21)
-    $g.DrawLine($pen, 14, 17, 9, 21)
-    $g.DrawLine($pen, 14, 25, 9, 21)
-}
-
-# Selection sum: a compact sigma symbol for aggregation.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'sum.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 255, 193, 87)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    $g.DrawLine($accent, 8, 8, 24, 8)
-    $g.DrawLine($accent, 8, 8, 21, 16)
-    $g.DrawLine($accent, 21, 16, 8, 24)
-    $g.DrawLine($accent, 8, 24, 24, 24)
-}
-
-# Uppercase: a bold Chinese "大" mark with a small seal accent.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'uppercase.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 166, 230, 183)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    $font = New-Object System.Drawing.Font('Microsoft YaHei UI', 15, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+# 1. Rounding: a white precision dial with a blue tick and arrow.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'round.png') -DrawSymbol {
+    param($g, $p)
+    $g.FillEllipse($p.EdgeBrush, 8, 8, 16, 16)
+    Draw-OutlinedArc $g $p.LineEdgePen $p.WhitePen 4 4 24 24 35 285
+    $arrow = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 22 5),
+        (New-PointF 28 7),
+        (New-PointF 26 13),
+        (New-PointF 23 10)
+    ))
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $arrow
+    $arrow.Dispose()
+    $font = New-Object System.Drawing.Font('Segoe UI', 8.5, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
     $format = New-Object System.Drawing.StringFormat
     $format.Alignment = [System.Drawing.StringAlignment]::Center
     $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $g.DrawString('大', $font, $brush, (New-Object System.Drawing.RectangleF(4, 3, 24, 24)), $format)
-    $g.DrawRectangle($accent, 21, 21, 5, 5)
+    Draw-OutlinedText $g '0.0' $font $p.EdgeBrush $p.WhiteBrush ([System.Drawing.RectangleF]::new(8, 10, 16, 8)) $format
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 16 21 16 25
     $font.Dispose()
     $format.Dispose()
 }
 
-# Directory: a document with a compact list marker.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'directory.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 166, 230, 183)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    $g.DrawRectangle($pen, 8, 6, 16, 20)
-    $g.DrawLine($accent, 12, 12, 14, 12)
-    $g.DrawLine($accent, 12, 17, 14, 17)
-    $g.DrawLine($accent, 12, 22, 14, 22)
-    $g.DrawLine($pen, 17, 12, 21, 12)
-    $g.DrawLine($pen, 17, 17, 21, 17)
-    $g.DrawLine($pen, 17, 22, 21, 22)
+# 2. Amount conversion: opposing blue and cyan arrows.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'convert.png') -DrawSymbol {
+    param($g, $p)
+    $topArrow = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 7 8),
+        (New-PointF 21 8),
+        (New-PointF 21 5),
+        (New-PointF 28 11),
+        (New-PointF 21 17),
+        (New-PointF 21 14),
+        (New-PointF 7 14)
+    ))
+    Fill-OutlinedPath $g $p.EdgePen $p.BlueBrush $topArrow
+    $topArrow.Dispose()
+
+    $bottomArrow = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 25 18),
+        (New-PointF 11 18),
+        (New-PointF 11 15),
+        (New-PointF 4 21),
+        (New-PointF 11 27),
+        (New-PointF 11 24),
+        (New-PointF 25 24)
+    ))
+    Fill-OutlinedPath $g $p.EdgePen $p.CyanBrush $bottomArrow
+    $bottomArrow.Dispose()
 }
 
-# Comment assistant: a speech bubble with three text dots.
-New-AccuXIcon -Path (Join-Path $OutputDirectory 'comment.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 255, 193, 87)) -DrawSymbol {
-    param($g, $pen, $brush, $accent, $accentBrush)
-    # 尾巴并入轮廓路径，避免在 32px 下被描边填成实心楔形。
-    # 注意：GraphicsPath.AddLine(x, y) 会被 PowerShell 误绑到带默认 0 的重载，
-    # 这里统一用 AddLines + PointF 传入。
-    $bubble = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $bubble.AddArc(6, 7, 8, 8, 180, 90)
-    $bubble.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(22, 7))))
-    $bubble.AddArc(18, 7, 8, 8, 270, 90)
-    $bubble.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(26, 18))))
-    $bubble.AddArc(18, 14, 8, 8, 0, 90)
-    $bubble.AddLines([System.Drawing.PointF[]]@(
-        (New-Object System.Drawing.PointF(15, 22)),
-        (New-Object System.Drawing.PointF(10, 27)),
-        (New-Object System.Drawing.PointF(9, 22))))
-    $bubble.AddArc(6, 14, 8, 8, 90, 90)
-    $bubble.CloseFigure()
-    $g.DrawPath($pen, $bubble)
-    $g.FillEllipse($accentBrush, 10, 13, 3, 3)
-    $g.FillEllipse($accentBrush, 15, 13, 3, 3)
-    $g.FillEllipse($accentBrush, 20, 13, 3, 3)
+# 3. Selection sum: document/list plus a large sigma.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'sum.png') -DrawSymbol {
+    param($g, $p)
+    $document = New-DocumentPath 4 5 23 22 5
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $document
+    $document.Dispose()
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 7 10 16 10
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 7 14 14 14
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 7 18 13 18
+    $font = New-Object System.Drawing.Font('Segoe UI Symbol', 18, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $format = New-Object System.Drawing.StringFormat
+    $format.Alignment = [System.Drawing.StringAlignment]::Center
+    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+    Draw-OutlinedText $g 'Σ' $font $p.EdgeBrush $p.BlueBrush ([System.Drawing.RectangleF]::new(14, 10, 12, 15)) $format
+    $font.Dispose()
+    $format.Dispose()
+}
+
+# 4. Chinese uppercase amount: a white document behind a bold blue 大.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'uppercase.png') -DrawSymbol {
+    param($g, $p)
+    $document = New-DocumentPath 4 5 23 22 5
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $document
+    $document.Dispose()
+    $font = New-Object System.Drawing.Font('Microsoft YaHei UI', 17, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $format = New-Object System.Drawing.StringFormat
+    $format.Alignment = [System.Drawing.StringAlignment]::Center
+    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+    Draw-OutlinedText $g '大' $font $p.EdgeBrush $p.BlueBrush ([System.Drawing.RectangleF]::new(6, 7, 20, 18)) $format
+    $font.Dispose()
+    $format.Dispose()
+}
+
+# 5. Workbook directory: document, index bullets, and list lines.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'directory.png') -DrawSymbol {
+    param($g, $p)
+    $document = New-DocumentPath 5 4 22 24 5
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $document
+    $document.Dispose()
+    Fill-OutlinedRectangle $g $p.EdgeBrush $p.BlueBrush 8 10 3.5 3.5
+    Fill-OutlinedRectangle $g $p.EdgeBrush $p.BlueBrush 8 16 3.5 3.5
+    Fill-OutlinedRectangle $g $p.EdgeBrush $p.BlueBrush 8 22 3.5 3.5
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 14 11.5 23 11.5
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 14 17.5 23 17.5
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 14 23.5 23 23.5
+}
+
+# 6. Comment assistant: white bubble with a blue outline and blue dots.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'comment.png') -DrawSymbol {
+    param($g, $p)
+    $bubble = New-ChatPath
+    $g.FillPath($p.WhiteBrush, $bubble)
+    $g.DrawPath($p.EdgePen, $bubble)
+    $g.DrawPath($p.BluePen, $bubble)
     $bubble.Dispose()
+    Fill-OutlinedEllipse $g $p.EdgeBrush $p.BlueBrush 10 13 3.5 3.5
+    Fill-OutlinedEllipse $g $p.EdgeBrush $p.BlueBrush 15 13 3.5 3.5
+    Fill-OutlinedEllipse $g $p.EdgeBrush $p.BlueBrush 20 13 3.5 3.5
 }
 
-function New-AccuXTextIcon {
-    param(
-        [string]$Path,
-        [System.Drawing.Color]$BackgroundColor,
-        [string]$Symbol
-    )
-
-    $size = 32
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
-    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $graphics.Clear($BackgroundColor)
-
-    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $font = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $format = New-Object System.Drawing.StringFormat
-    $format.Alignment = [System.Drawing.StringAlignment]::Center
-    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $graphics.DrawString($Symbol, $font, $whiteBrush, (New-Object System.Drawing.RectangleF(0, 0, 32, 32)), $format)
-
-    $format.Dispose()
-    $font.Dispose()
-    $whiteBrush.Dispose()
-    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $graphics.Dispose()
-    $bitmap.Dispose()
+# 7. Region compare: two sheets with green/blue cells and center chevrons.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'compare.png') -DrawSymbol {
+    param($g, $p)
+    # The compare control is a large Ribbon button, so use almost the full
+    # 32px canvas and keep the comparison mark visually dominant.
+    $leftDocument = New-DocumentPath 1 3 14 26 5
+    $rightDocument = New-DocumentPath 17 3 14 26 5
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $leftDocument
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $rightDocument
+    $leftDocument.Dispose()
+    $rightDocument.Dispose()
+    Fill-OutlinedRectangle $g $p.EdgeBrush $p.GreenBrush 4 8 4.5 4.5
+    Fill-OutlinedRectangle $g $p.EdgeBrush $p.BlueBrush 23.5 8 4.5 4.5
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 10 10.25 13 10.25
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 20 10.25 23 10.25
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 4 16 12 16
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 20 16 28 16
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 4 23 12 23
+    Draw-OutlinedLine $g $p.LineEdgePen $p.SlatePen 20 23 28 23
+    $leftChevron = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 15 12), (New-PointF 11 16), (New-PointF 15 20)
+    ))
+    $rightChevron = New-PolygonPath ([System.Drawing.PointF[]]@(
+        (New-PointF 17 12), (New-PointF 21 16), (New-PointF 17 20)
+    ))
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $leftChevron
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $rightChevron
+    $leftChevron.Dispose()
+    $rightChevron.Dispose()
 }
 
-# Mark colors: opaque color tile with the requested white letter.
-New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-green.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 24, 190, 106)) -Symbol 'T'
-New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-red.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 237, 64, 21)) -Symbol 'F'
-New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-yellow.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 254, 153, 0)) -Symbol 'W'
-New-AccuXTextIcon -Path (Join-Path $OutputDirectory 'mark-blue.png') -BackgroundColor ([System.Drawing.Color]::FromArgb(255, 45, 183, 245)) -Symbol 'M'
+# 8-11. Mark actions: the four approved color variants of a highlighter.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'mark-green.png') -DrawSymbol {
+    param($g, $p)
+    Draw-Highlighter $g $p $p.GreenBrush $p.GreenPen
+}
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'mark-red.png') -DrawSymbol {
+    param($g, $p)
+    Draw-Highlighter $g $p $p.RedBrush $p.RedPen
+}
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'mark-yellow.png') -DrawSymbol {
+    param($g, $p)
+    Draw-Highlighter $g $p $p.YellowBrush $p.YellowPen
+}
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'mark-blue.png') -DrawSymbol {
+    param($g, $p)
+    Draw-Highlighter $g $p $p.BlueBrush $p.BluePen
+}
 
 Write-Host "Icons written to $OutputDirectory"
-Get-ChildItem $OutputDirectory -Filter *.png | ForEach-Object { Write-Host " - $($_.Name)" }
+Get-ChildItem $OutputDirectory -Filter *.png | Sort-Object Name | ForEach-Object { Write-Host " - $($_.Name)" }
