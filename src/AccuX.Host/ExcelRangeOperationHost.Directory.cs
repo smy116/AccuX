@@ -18,9 +18,19 @@ namespace AccuX.Host
         private static readonly int HyperlinkColor = Rgb(5, 99, 193);
 
         /// <summary>
-        /// 在当前工作簿最前面生成工作表目录。
+        /// 判断当前活动工作簿中是否已存在“目录”工作表。
         /// </summary>
-        public int GenerateDirectory()
+        public bool DirectoryWorksheetExists()
+        {
+            var workbook = GetActiveWorkbook();
+            return FindDirectoryWorksheet(workbook) != null;
+        }
+
+        /// <summary>
+        /// 在当前工作簿最前面生成工作表目录。
+        /// replaceExisting 为 true 时先删除已存在的“目录”工作表再重新生成。
+        /// </summary>
+        public int GenerateDirectory(bool replaceExisting)
         {
             Excel.Workbook workbook = null;
             Excel.Worksheet directoryWorksheet = null;
@@ -29,15 +39,19 @@ namespace AccuX.Host
             try
             {
                 workbook = GetActiveWorkbook();
-                EnsureDirectoryWorksheetDoesNotExist(workbook);
+                var existingDirectoryWorksheet = FindDirectoryWorksheet(workbook);
+                if (existingDirectoryWorksheet != null && !replaceExisting)
+                {
+                    throw new HostOperationException("工作簿中已存在“目录”工作表，请删除后重试。");
+                }
 
                 if (workbook.ProtectStructure)
                 {
                     throw new HostOperationException("工作簿结构已保护，请先取消保护后重试。");
                 }
 
-                // 先完成所有读取和内容准备，再创建新工作表，避免前置校验失败时留下半成品。
-                var visibleWorksheetNames = ReadVisibleWorksheetNames(workbook);
+                // 先完成所有读取和内容准备，再删除旧表、创建新表，避免前置校验失败时改动工作簿。
+                var visibleWorksheetNames = ReadVisibleWorksheetNames(workbook, existingDirectoryWorksheet);
                 var title = BuildDirectoryTitle(workbook.Name);
 
                 using (BeginStateScope(new HostStateOptions
@@ -47,6 +61,11 @@ namespace AccuX.Host
                     DisableDisplayAlerts = true
                 }))
                 {
+                    if (existingDirectoryWorksheet != null)
+                    {
+                        existingDirectoryWorksheet.Delete();
+                    }
+
                     var firstSheet = workbook.Sheets[1];
                     directoryWorksheet = workbook.Worksheets.Add(
                         firstSheet,
@@ -86,23 +105,33 @@ namespace AccuX.Host
             }
         }
 
-        private static void EnsureDirectoryWorksheetDoesNotExist(Excel.Workbook workbook)
+        private static Excel.Worksheet FindDirectoryWorksheet(Excel.Workbook workbook)
         {
             foreach (Excel.Worksheet worksheet in workbook.Worksheets)
             {
                 if (string.Equals(worksheet.Name, DirectoryWorksheetName, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new HostOperationException("工作簿中已存在“目录”工作表，请删除后重试。");
+                    return worksheet;
                 }
             }
+
+            return null;
         }
 
-        private static List<string> ReadVisibleWorksheetNames(Excel.Workbook workbook)
+        private static List<string> ReadVisibleWorksheetNames(
+            Excel.Workbook workbook,
+            Excel.Worksheet excludedWorksheet)
         {
             var names = new List<string>();
 
             foreach (Excel.Worksheet worksheet in workbook.Worksheets)
             {
+                // 替换模式下旧“目录”表会被删除，不应出现在新目录中。
+                if (worksheet == excludedWorksheet)
+                {
+                    continue;
+                }
+
                 if (worksheet.Visible == Excel.XlSheetVisibility.xlSheetVisible)
                 {
                     names.Add(worksheet.Name ?? string.Empty);

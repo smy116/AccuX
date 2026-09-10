@@ -68,7 +68,7 @@ namespace AccuX.Modules.BasicFinance
                 new AmountConversionCommand(_prompt, stateOptions).CreateDefinition(ModuleId),
                 new SelectionSumCommand(_prompt).CreateDefinition(ModuleId),
                 new ChineseAmountCommand(_prompt, stateOptions).CreateDefinition(ModuleId),
-                new DirectoryCommand().CreateDefinition(ModuleId),
+                new DirectoryCommand(_prompt).CreateDefinition(ModuleId),
                 new CommentCommand(_commentPrompt).CreateDefinition(ModuleId)
             };
 

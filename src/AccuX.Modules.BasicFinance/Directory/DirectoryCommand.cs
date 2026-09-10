@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using AccuX.Core.Commands;
 using AccuX.Core.Operations;
+using AccuX.Modules.BasicFinance.Common;
 
 namespace AccuX.Modules.BasicFinance.Directory
 {
@@ -11,6 +12,13 @@ namespace AccuX.Modules.BasicFinance.Directory
     public sealed class DirectoryCommand
     {
         public const string CommandId = "accux.basic.directory";
+
+        private readonly IUserPrompt _prompt;
+
+        public DirectoryCommand(IUserPrompt prompt)
+        {
+            _prompt = prompt ?? throw new ArgumentNullException(nameof(prompt));
+        }
 
         public CommandDefinition CreateDefinition(string moduleId)
         {
@@ -23,7 +31,7 @@ namespace AccuX.Modules.BasicFinance.Directory
                 CommandId);
         }
 
-        private static CommandResult Execute(CommandExecutionContext execution)
+        private CommandResult Execute(CommandExecutionContext execution)
         {
             var host = execution.Context.WorkbookDirectoryHost;
             if (host == null)
@@ -33,7 +41,18 @@ namespace AccuX.Modules.BasicFinance.Directory
 
             try
             {
-                var count = host.GenerateDirectory();
+                var replaceExisting = false;
+                if (host.DirectoryWorksheetExists())
+                {
+                    if (!_prompt.ConfirmReplaceDirectory())
+                    {
+                        return CommandResult.Cancelled();
+                    }
+
+                    replaceExisting = true;
+                }
+
+                var count = host.GenerateDirectory(replaceExisting);
                 var message = string.Format(
                     CultureInfo.InvariantCulture,
                     "生成完成！共生成{0}个表格的目录。",

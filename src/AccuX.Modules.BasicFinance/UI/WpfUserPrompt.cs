@@ -101,6 +101,17 @@ namespace AccuX.Modules.BasicFinance.UI
             return result == MessageBoxResult.Yes;
         }
 
+        public bool ConfirmReplaceDirectory()
+        {
+            var result = MessageBox.Show(
+                "工作簿中已存在“目录”工作表，是否删除并重新生成？",
+                "AccuX",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            return result == MessageBoxResult.Yes;
+        }
+
         public void ShowMessage(string message)
         {
             if (!string.IsNullOrEmpty(message))

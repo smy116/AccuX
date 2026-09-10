@@ -442,6 +442,16 @@ namespace AccuX.Modules.BasicFinance.Tests
             return ConfirmResult;
         }
 
+        public bool ReplaceDirectoryResult { get; set; } = true;
+
+        public int ReplaceDirectoryConfirmCalls { get; private set; }
+
+        public bool ConfirmReplaceDirectory()
+        {
+            ReplaceDirectoryConfirmCalls++;
+            return ReplaceDirectoryResult;
+        }
+
         public void ShowMessage(string message)
         {
         }

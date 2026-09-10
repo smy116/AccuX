@@ -17,22 +17,61 @@ namespace AccuX.Modules.BasicFinance.Tests
         public void Execute_ReturnsExactCompletionMessageAndGeneratedCount()
         {
             var directoryHost = new RecordingDirectoryHost { GeneratedCount = 3 };
-            var context = CreateContext(directoryHost);
-            var command = new DirectoryCommand();
-            var definition = command.CreateDefinition("test.module");
+            var prompt = new RecordingPrompt();
 
-            var result = definition.Handler(new CommandExecutionContext(definition, context));
+            var result = Execute(directoryHost, prompt);
 
             Assert.True(result.Success);
             Assert.Equal("生成完成！共生成3个表格的目录。", result.Message);
             Assert.Equal(1, directoryHost.GenerateCalls);
+            Assert.False(directoryHost.LastReplaceExisting);
+            Assert.Equal(0, prompt.ReplaceDirectoryConfirmCalls);
+        }
+
+        [Fact]
+        public void Execute_ExistingDirectoryConfirmed_RegeneratesWithReplacement()
+        {
+            var directoryHost = new RecordingDirectoryHost
+            {
+                GeneratedCount = 2,
+                DirectoryExists = true
+            };
+            var prompt = new RecordingPrompt { ReplaceDirectoryResult = true };
+
+            var result = Execute(directoryHost, prompt);
+
+            Assert.True(result.Success);
+            Assert.Equal("生成完成！共生成2个表格的目录。", result.Message);
+            Assert.True(result.ShowMessage);
+            Assert.Equal(1, prompt.ReplaceDirectoryConfirmCalls);
+            Assert.Equal(1, directoryHost.GenerateCalls);
+            Assert.True(directoryHost.LastReplaceExisting);
+        }
+
+        [Fact]
+        public void Execute_ExistingDirectoryDeclined_ReturnsCancelledWithoutGenerating()
+        {
+            var directoryHost = new RecordingDirectoryHost
+            {
+                GeneratedCount = 2,
+                DirectoryExists = true
+            };
+            var prompt = new RecordingPrompt { ReplaceDirectoryResult = false };
+
+            var result = Execute(directoryHost, prompt);
+
+            Assert.True(result.Success);
+            Assert.False(result.ShowMessage);
+            Assert.Equal(string.Empty, result.Message);
+            Assert.Equal(1, prompt.ReplaceDirectoryConfirmCalls);
+            Assert.Equal(0, directoryHost.GenerateCalls);
         }
 
         [Fact]
         public void Execute_WithoutWorkbookDirectoryHost_ReturnsFailure()
         {
             var context = CreateContext(null);
-            var command = new DirectoryCommand();
+            var command = new DirectoryCommand(new RecordingPrompt());
             var definition = command.CreateDefinition("test.module");
 
             var result = definition.Handler(new CommandExecutionContext(definition, context));
@@ -46,17 +85,24 @@ namespace AccuX.Modules.BasicFinance.Tests
         {
             var directoryHost = new RecordingDirectoryHost
             {
-                Failure = new HostOperationException("工作簿中已存在“目录”工作表，请删除后重试。")
+                Failure = new HostOperationException("工作簿结构已保护，请先取消保护后重试。")
             };
-            var context = CreateContext(directoryHost);
-            var command = new DirectoryCommand();
-            var definition = command.CreateDefinition("test.module");
+            var prompt = new RecordingPrompt();
 
-            var result = definition.Handler(new CommandExecutionContext(definition, context));
+            var result = Execute(directoryHost, prompt);
 
             Assert.False(result.Success);
-            Assert.Equal("工作簿中已存在“目录”工作表，请删除后重试。", result.Message);
+            Assert.Equal("工作簿结构已保护，请先取消保护后重试。", result.Message);
             Assert.Equal(1, directoryHost.GenerateCalls);
+        }
+
+        private static CommandResult Execute(RecordingDirectoryHost directoryHost, RecordingPrompt prompt)
+        {
+            var context = CreateContext(directoryHost);
+            var command = new DirectoryCommand(prompt);
+            var definition = command.CreateDefinition("test.module");
+
+            return definition.Handler(new CommandExecutionContext(definition, context));
         }
 
         private static IAccuXContext CreateContext(IWorkbookDirectoryHost directoryHost)
@@ -76,16 +122,31 @@ namespace AccuX.Modules.BasicFinance.Tests
     {
         public int GeneratedCount { get; set; }
 
+        public bool DirectoryExists { get; set; }
+
         public int GenerateCalls { get; private set; }
+
+        public bool LastReplaceExisting { get; private set; }
 
         public HostOperationException Failure { get; set; }
 
-        public int GenerateDirectory()
+        public bool DirectoryWorksheetExists()
+        {
+            return DirectoryExists;
+        }
+
+        public int GenerateDirectory(bool replaceExisting)
         {
             GenerateCalls++;
+            LastReplaceExisting = replaceExisting;
             if (Failure != null)
             {
                 throw Failure;
+            }
+
+            if (DirectoryExists && !replaceExisting)
+            {
+                throw new HostOperationException("工作簿中已存在“目录”工作表，请删除后重试。");
             }
 
             return GeneratedCount;

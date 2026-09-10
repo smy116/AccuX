@@ -12,7 +12,7 @@
 | --- | --- |
 | AccuX 版本 | 1.0 |
 | 开发机 Office | Microsoft Office 16（Excel x64，路径 `C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE`） |
-| 开发机 WPS | 未安装 |
+| 开发机 WPS | WPS Office 12.1.0.28488（ET x64；本机 `Excel.Application` ProgID/CLSID 由 WPS 接管，COM `Excel.Application` 与 `Excel.Application.16` 均解析到 `et.exe`） |
 | 目标框架 | .NET Framework 4.8 |
 | 构建工具 | Visual Studio 2022 / MSBuild 17 |
 
@@ -37,7 +37,7 @@
 | NumberFormat 读取 | Excel | 16.0 | x64 | 待验证 | 用于日期识别 |
 | 隐藏行/列识别 | Excel | 16.0 | x64 | 待验证 | Host 读取 `Rows.Hidden` / `Columns.Hidden`，公共 Pipeline 跳过隐藏单元格 |
 | 选区求和 | Excel | 16.0 | x64 | 待验证 | 可见数字求和、两位舍入、三格式复制对话框 |
-| 生成目录 | Excel | 16.0 | x64 | 通过 | 临时工作簿 COM 验证：仅列出可见工作表，目录插入首位，名称列使用内部超链接 |
+| 生成目录 | Excel | 16.0 | x64 | 通过 | 临时工作簿 COM 验证：仅列出可见工作表，目录插入首位，名称列使用内部超链接；存在“目录”表时 `replaceExisting=false` 拒绝、`true` 删除重建且新目录不含自身 |
 | 可见单元格底色标记 | Excel | 16.0 | x64 | 待验证 | 需验证四种颜色、隐藏行列跳过以及值/公式/数字格式保持不变 |
 | 剪切板复制 | Excel | 16.0 | x64 | 待验证 | 金额 / 万元金额 / 大写金额复制；失败时不显示 MsgBox |
 | ScreenUpdating | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
@@ -59,7 +59,7 @@
 | Formula 写回 | WPS | - | - | 未验证 | 本机未安装 WPS |
 | Range Value | WPS | - | - | 未验证 | 本机未安装 WPS |
 | 隐藏行/列识别 | WPS | - | - | 未验证 | 需验证 `Rows.Hidden` / `Columns.Hidden` 返回值 |
-| 生成目录 | WPS | - | - | 未验证 | 需验证可见性、首位插入与内部超链接行为 |
+| 生成目录 | WPS | 12.1 | x64 | 通过 | 临时工作簿 COM 验证（ET 12.1.0.28488）：仅列出可见工作表、目录插入首位、名称列内部超链接，替换行为与 Excel 一致；Add-in 加载 / Ribbon / WPF 确认框仍待人工验证 |
 | 可见单元格底色标记 | WPS | - | - | 未验证 | 需验证 `Interior.Pattern` / `Interior.Color` 与隐藏行列处理 |
 | 选区求和 | WPS | - | - | 未验证 | 需验证可见数字求和、三格式复制对话框与窗口关闭行为 |
 | 剪切板复制 | WPS | - | - | 未验证 | 本机未安装 WPS；需验证三种格式复制 |
