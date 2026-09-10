@@ -4,34 +4,46 @@ using System.IO;
 using AccuX.Core.Operations;
 using Excel = Microsoft.Office.Interop.Excel;
 
-namespace AccuX.Host
+namespace AccuX.Host.Features
 {
-    public sealed partial class ExcelRangeOperationHost
+    /// <summary>
+    /// “生成目录”功能的宿主实现。
+    /// <para>
+    /// 只负责 COM 机制：查找 / 删除 / 新建工作表、批量写入、超链接与样式落地、失败回滚。
+    /// 目录的文案与外观（标题、表头、配色、列宽、行高、字号）全部来自业务模块提供的
+    /// <see cref="DirectoryOptions"/>，本类不内置任何目录专属常量。
+    /// </para>
+    /// </summary>
+    public sealed class ExcelWorkbookDirectoryHost : ExcelHostBase, IWorkbookDirectoryHost
     {
-        private const string DirectoryWorksheetName = "目录";
-        private static readonly int TitleBackgroundColor = Rgb(20, 49, 70);
-        private static readonly int HeaderBackgroundColor = Rgb(43, 99, 145);
-        private static readonly int AlternateRowBackgroundColor = Rgb(242, 246, 250);
-        private static readonly int BorderColor = Rgb(210, 218, 226);
-        private static readonly int WhiteColor = Rgb(255, 255, 255);
-        private static readonly int BodyTextColor = Rgb(31, 41, 55);
-        private static readonly int HyperlinkColor = Rgb(5, 99, 193);
+        private const int ColumnCount = 3;
 
-        /// <summary>
-        /// 判断当前活动工作簿中是否已存在“目录”工作表。
-        /// </summary>
-        public bool DirectoryWorksheetExists()
+        public ExcelWorkbookDirectoryHost(Excel.Application application)
+            : base(application)
         {
-            var workbook = GetActiveWorkbook();
-            return FindDirectoryWorksheet(workbook) != null;
         }
 
         /// <summary>
-        /// 在当前工作簿最前面生成工作表目录。
-        /// replaceExisting 为 true 时先删除已存在的“目录”工作表再重新生成。
+        /// 判断当前活动工作簿中是否已存在指定名称的工作表。
         /// </summary>
-        public int GenerateDirectory(bool replaceExisting)
+        public bool DirectoryWorksheetExists(string worksheetName)
         {
+            var workbook = GetActiveWorkbook();
+            return FindWorksheet(workbook, worksheetName) != null;
+        }
+
+        /// <summary>
+        /// 在当前工作簿最前面生成目录工作表；replaceExisting 为 true 时先删除同名旧表。
+        /// </summary>
+        public int GenerateDirectory(DirectoryOptions options, bool replaceExisting)
+        {
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
+            ValidateOptions(options);
+
             Excel.Workbook workbook = null;
             Excel.Worksheet directoryWorksheet = null;
             var completed = false;
@@ -39,10 +51,11 @@ namespace AccuX.Host
             try
             {
                 workbook = GetActiveWorkbook();
-                var existingDirectoryWorksheet = FindDirectoryWorksheet(workbook);
-                if (existingDirectoryWorksheet != null && !replaceExisting)
+                var existingWorksheet = FindWorksheet(workbook, options.WorksheetName);
+                if (existingWorksheet != null && !replaceExisting)
                 {
-                    throw new HostOperationException("工作簿中已存在“目录”工作表，请删除后重试。");
+                    throw new HostOperationException(
+                        "工作簿中已存在“" + options.WorksheetName + "”工作表，请删除后重试。");
                 }
 
                 if (workbook.ProtectStructure)
@@ -51,19 +64,19 @@ namespace AccuX.Host
                 }
 
                 // 先完成所有读取和内容准备，再删除旧表、创建新表，避免前置校验失败时改动工作簿。
-                var visibleWorksheetNames = ReadVisibleWorksheetNames(workbook, existingDirectoryWorksheet);
-                var title = BuildDirectoryTitle(workbook.Name);
+                var visibleWorksheetNames = ReadVisibleWorksheetNames(workbook, existingWorksheet);
+                var title = BuildTitle(workbook.Name, options);
 
-                using (BeginStateScope(new HostStateOptions
+                using (CreateStateScope(new HostStateOptions
                 {
                     DisableScreenUpdating = true,
                     DisableEvents = true,
                     DisableDisplayAlerts = true
                 }))
                 {
-                    if (existingDirectoryWorksheet != null)
+                    if (existingWorksheet != null)
                     {
-                        existingDirectoryWorksheet.Delete();
+                        existingWorksheet.Delete();
                     }
 
                     var firstSheet = workbook.Sheets[1];
@@ -75,11 +88,11 @@ namespace AccuX.Host
 
                     if (directoryWorksheet == null)
                     {
-                        throw new HostOperationException("无法创建“目录”工作表。");
+                        throw new HostOperationException("无法创建“" + options.WorksheetName + "”工作表。");
                     }
 
-                    directoryWorksheet.Name = DirectoryWorksheetName;
-                    WriteDirectoryContents(directoryWorksheet, title, visibleWorksheetNames);
+                    directoryWorksheet.Name = options.WorksheetName;
+                    WriteDirectoryContents(directoryWorksheet, title, visibleWorksheetNames, options);
                     completed = true;
                 }
 
@@ -89,7 +102,7 @@ namespace AccuX.Host
             {
                 if (!completed)
                 {
-                    TryDeleteCreatedDirectoryWorksheet(directoryWorksheet);
+                    TryDeleteWorksheet(directoryWorksheet);
                 }
 
                 throw;
@@ -98,18 +111,32 @@ namespace AccuX.Host
             {
                 if (!completed)
                 {
-                    TryDeleteCreatedDirectoryWorksheet(directoryWorksheet);
+                    TryDeleteWorksheet(directoryWorksheet);
                 }
 
                 throw new HostOperationException("生成目录失败：" + ex.Message, ex);
             }
         }
 
-        private static Excel.Worksheet FindDirectoryWorksheet(Excel.Workbook workbook)
+        private static void ValidateOptions(DirectoryOptions options)
+        {
+            if (string.IsNullOrWhiteSpace(options.WorksheetName))
+            {
+                throw new HostOperationException("目录工作表名称不能为空。");
+            }
+
+            if (options.Headers == null || options.Headers.Length != ColumnCount
+                || options.ColumnWidths == null || options.ColumnWidths.Length != ColumnCount)
+            {
+                throw new HostOperationException("目录模板必须提供 " + ColumnCount + " 列的表头与列宽。");
+            }
+        }
+
+        private static Excel.Worksheet FindWorksheet(Excel.Workbook workbook, string worksheetName)
         {
             foreach (Excel.Worksheet worksheet in workbook.Worksheets)
             {
-                if (string.Equals(worksheet.Name, DirectoryWorksheetName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(worksheet.Name, worksheetName, StringComparison.OrdinalIgnoreCase))
                 {
                     return worksheet;
                 }
@@ -126,7 +153,7 @@ namespace AccuX.Host
 
             foreach (Excel.Worksheet worksheet in workbook.Worksheets)
             {
-                // 替换模式下旧“目录”表会被删除，不应出现在新目录中。
+                // 替换模式下旧目录表会被删除，不应出现在新目录中。
                 if (worksheet == excludedWorksheet)
                 {
                     continue;
@@ -141,16 +168,17 @@ namespace AccuX.Host
             return names;
         }
 
-        private static string BuildDirectoryTitle(string workbookName)
+        private static string BuildTitle(string workbookName, DirectoryOptions options)
         {
             var title = Path.GetFileNameWithoutExtension(workbookName ?? string.Empty);
-            return string.IsNullOrEmpty(title) ? "工作簿目录" : title + DirectoryWorksheetName;
+            return string.IsNullOrEmpty(title) ? options.FallbackTitle : title + options.TitleSuffix;
         }
 
         private static void WriteDirectoryContents(
             Excel.Worksheet directoryWorksheet,
             string title,
-            IReadOnlyList<string> worksheetNames)
+            IReadOnlyList<string> worksheetNames,
+            DirectoryOptions options)
         {
             var titleRange = directoryWorksheet.Range["A1:C1"];
             titleRange.Merge(Type.Missing);
@@ -159,17 +187,17 @@ namespace AccuX.Host
             var headerRange = directoryWorksheet.Range["A2:C2"];
             headerRange.Value2 = new object[,]
             {
-                { "序号", "名称", "备注" }
+                { options.Headers[0], options.Headers[1], options.Headers[2] }
             };
 
             Excel.Range dataRange = null;
             if (worksheetNames.Count == 0)
             {
-                ApplyDirectoryStyle(directoryWorksheet, titleRange, headerRange, null, 0);
+                ApplyDirectoryStyle(directoryWorksheet, titleRange, headerRange, null, 0, options);
                 return;
             }
 
-            var rows = new object[worksheetNames.Count, 3];
+            var rows = new object[worksheetNames.Count, ColumnCount];
             for (var index = 0; index < worksheetNames.Count; index++)
             {
                 rows[index, 0] = index + 1;
@@ -178,7 +206,7 @@ namespace AccuX.Host
             }
 
             var firstDataCell = (Excel.Range)directoryWorksheet.Cells[3, 1];
-            var lastDataCell = (Excel.Range)directoryWorksheet.Cells[worksheetNames.Count + 2, 3];
+            var lastDataCell = (Excel.Range)directoryWorksheet.Cells[worksheetNames.Count + 2, ColumnCount];
             dataRange = directoryWorksheet.Range[firstDataCell, lastDataCell];
             dataRange.Value2 = rows;
 
@@ -193,7 +221,7 @@ namespace AccuX.Host
                     worksheetNames[index]);
             }
 
-            ApplyDirectoryStyle(directoryWorksheet, titleRange, headerRange, dataRange, worksheetNames.Count);
+            ApplyDirectoryStyle(directoryWorksheet, titleRange, headerRange, dataRange, worksheetNames.Count, options);
         }
 
         private static void ApplyDirectoryStyle(
@@ -201,45 +229,54 @@ namespace AccuX.Host
             Excel.Range titleRange,
             Excel.Range headerRange,
             Excel.Range dataRange,
-            int worksheetCount)
+            int worksheetCount,
+            DirectoryOptions options)
         {
-            titleRange.Interior.Color = TitleBackgroundColor;
-            titleRange.Font.Color = WhiteColor;
+            var titleBackground = ExcelComHelper.ParseOleColor(options.TitleBackgroundColor);
+            var headerBackground = ExcelComHelper.ParseOleColor(options.HeaderBackgroundColor);
+            var alternateRowBackground = ExcelComHelper.ParseOleColor(options.AlternateRowColor);
+            var borderColor = ExcelComHelper.ParseOleColor(options.BorderColor);
+            var titleTextColor = ExcelComHelper.ParseOleColor(options.TitleTextColor);
+            var bodyTextColor = ExcelComHelper.ParseOleColor(options.BodyTextColor);
+            var hyperlinkColor = ExcelComHelper.ParseOleColor(options.HyperlinkColor);
+
+            titleRange.Interior.Color = titleBackground;
+            titleRange.Font.Color = titleTextColor;
             titleRange.Font.Bold = true;
-            titleRange.Font.Size = 16;
+            titleRange.Font.Size = options.TitleFontSize;
             titleRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
             titleRange.VerticalAlignment = Excel.XlVAlign.xlVAlignCenter;
             titleRange.WrapText = false;
-            titleRange.RowHeight = 30;
+            titleRange.RowHeight = options.TitleRowHeight;
 
-            headerRange.Interior.Color = HeaderBackgroundColor;
-            headerRange.Font.Color = WhiteColor;
+            headerRange.Interior.Color = headerBackground;
+            headerRange.Font.Color = titleTextColor;
             headerRange.Font.Bold = true;
-            headerRange.Font.Size = 11;
+            headerRange.Font.Size = options.HeaderFontSize;
             headerRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
             headerRange.VerticalAlignment = Excel.XlVAlign.xlVAlignCenter;
             headerRange.WrapText = false;
-            headerRange.RowHeight = 23;
+            headerRange.RowHeight = options.HeaderRowHeight;
 
             var tableRange = worksheetCount > 0
                 ? directoryWorksheet.Range["A2:C" + (worksheetCount + 2)]
                 : headerRange;
             tableRange.Borders.LineStyle = Excel.XlLineStyle.xlContinuous;
-            tableRange.Borders.Color = BorderColor;
+            tableRange.Borders.Color = borderColor;
             tableRange.Borders.Weight = Excel.XlBorderWeight.xlThin;
 
-            directoryWorksheet.Range["A:A"].ColumnWidth = 8;
-            directoryWorksheet.Range["B:B"].ColumnWidth = 30;
-            directoryWorksheet.Range["C:C"].ColumnWidth = 42;
+            directoryWorksheet.Range["A:A"].ColumnWidth = options.ColumnWidths[0];
+            directoryWorksheet.Range["B:B"].ColumnWidth = options.ColumnWidths[1];
+            directoryWorksheet.Range["C:C"].ColumnWidth = options.ColumnWidths[2];
 
             if (dataRange == null)
             {
                 return;
             }
 
-            dataRange.Font.Color = BodyTextColor;
+            dataRange.Font.Color = bodyTextColor;
             dataRange.VerticalAlignment = Excel.XlVAlign.xlVAlignCenter;
-            dataRange.RowHeight = 20;
+            dataRange.RowHeight = options.BodyRowHeight;
 
             var numberRange = directoryWorksheet.Range["A3:A" + (worksheetCount + 2)];
             numberRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
@@ -248,19 +285,15 @@ namespace AccuX.Host
             textRange.HorizontalAlignment = Excel.XlHAlign.xlHAlignLeft;
 
             var nameRange = directoryWorksheet.Range["B3:B" + (worksheetCount + 2)];
-            nameRange.Font.Color = HyperlinkColor;
+            nameRange.Font.Color = hyperlinkColor;
             nameRange.Font.Underline = Excel.XlUnderlineStyle.xlUnderlineStyleSingle;
 
+            // 隔行底纹属于渲染规则，颜色由业务模板提供。
             for (var index = 0; index < worksheetCount; index += 2)
             {
                 var row = index + 3;
-                directoryWorksheet.Range["A" + row + ":C" + row].Interior.Color = AlternateRowBackgroundColor;
+                directoryWorksheet.Range["A" + row + ":C" + row].Interior.Color = alternateRowBackground;
             }
-        }
-
-        private static int Rgb(int red, int green, int blue)
-        {
-            return red + (green << 8) + (blue << 16);
         }
 
         private static string BuildWorksheetSubAddress(string worksheetName)
@@ -269,7 +302,7 @@ namespace AccuX.Host
             return "'" + escapedName + "'!A1";
         }
 
-        private void TryDeleteCreatedDirectoryWorksheet(Excel.Worksheet worksheet)
+        private void TryDeleteWorksheet(Excel.Worksheet worksheet)
         {
             if (worksheet == null)
             {
@@ -278,7 +311,7 @@ namespace AccuX.Host
 
             try
             {
-                using (BeginStateScope(new HostStateOptions
+                using (CreateStateScope(new HostStateOptions
                 {
                     DisableDisplayAlerts = true
                 }))

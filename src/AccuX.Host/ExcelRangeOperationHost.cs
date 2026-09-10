@@ -1,32 +1,28 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.InteropServices;
-using AccuX.Core.Cells;
 using AccuX.Core.Operations;
 using Excel = Microsoft.Office.Interop.Excel;
 
 namespace AccuX.Host
 {
     /// <summary>
-    /// Excel / WPS 表格宿主适配实现（规格 §5.2 / §8）。
+    /// 范围操作宿主实现（规格 §5.2 / §8）：批量 Value/Formula 读写、公式规范化、特殊区域识别、宿主状态管理。
     /// <para>
-    /// 职责：宿主差异、COM 边界、批量 Value/Formula 读写、公式规范化、特殊区域识别、宿主状态管理。
-    /// 所有 Excel/WPS 差异只允许出现在本工程；业务 Module 不接触 COM。
+    /// 只实现 <see cref="IRangeOperationHost"/>；目录、批注、标记等具体功能的 COM 实现位于
+    /// Features 目录下各自的宿主类，共享机制来自 <see cref="ExcelHostBase"/>。
     /// </para>
     /// <para>
-    /// COM 对象只在本类内部使用，不外泄到 Core / Module。
+    /// COM 对象只在本工程内部使用，不外泄到 Core / Module。
     /// V1 不对临时 RCW 显式调用 Marshal.ReleaseComObject（以实际兼容性验证为准），依赖 GC 回收。
     /// </para>
     /// </summary>
-    public sealed partial class ExcelRangeOperationHost : IRangeOperationHost, IWorkbookDirectoryHost, ICellCommentHost, ICellMarkHost
+    public sealed partial class ExcelRangeOperationHost : ExcelHostBase, IRangeOperationHost
     {
-        private readonly Excel.Application _application;
         private readonly HostOptions _options;
 
         public ExcelRangeOperationHost(Excel.Application application, HostOptions options = null)
+            : base(application)
         {
-            _application = application ?? throw new ArgumentNullException(nameof(application));
             _options = options ?? new HostOptions();
             Context = HostDetector.Detect(application);
         }
@@ -187,7 +183,7 @@ namespace AccuX.Host
         /// </summary>
         public IHostStateScope BeginStateScope(HostStateOptions options)
         {
-            return new ExcelHostStateScope(_application, options ?? HostStateOptions.Default);
+            return CreateStateScope(options);
         }
 
         /// <summary>
@@ -198,192 +194,6 @@ namespace AccuX.Host
             var worksheet = ResolveWorksheetOrThrow(target);
             var range = worksheet.Range[target.Address];
             return ReadNumberFormatMatrix(range, target.RowCount, target.ColumnCount);
-        }
-
-        // ---------- 内部解析 ----------
-
-        private Excel.Workbook GetActiveWorkbook()
-        {
-            var workbook = _application.ActiveWorkbook;
-            if (workbook == null)
-            {
-                throw new HostOperationException("当前没有打开的工作簿。");
-            }
-
-            return workbook;
-        }
-
-        private Excel.Worksheet GetActiveWorksheet(Excel.Workbook workbook)
-        {
-            var sheet = workbook.ActiveSheet as Excel.Worksheet;
-            if (sheet == null)
-            {
-                throw new HostOperationException("当前没有活动的工作表。");
-            }
-
-            return sheet;
-        }
-
-        private Excel.Range GetSelectionRange(Excel.Worksheet worksheet)
-        {
-            try
-            {
-                return _application.Selection as Excel.Range;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private Excel.Workbook ResolveWorkbook(RangeTarget target)
-        {
-            if (target == null || string.IsNullOrEmpty(target.WorkbookKey))
-            {
-                return null;
-            }
-
-            foreach (Excel.Workbook workbook in _application.Workbooks)
-            {
-                if (string.Equals(BuildWorkbookKey(workbook), target.WorkbookKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    return workbook;
-                }
-            }
-
-            return null;
-        }
-
-        private Excel.Worksheet ResolveWorksheet(Excel.Workbook workbook, RangeTarget target)
-        {
-            if (workbook == null || target == null || string.IsNullOrEmpty(target.WorksheetKey))
-            {
-                return null;
-            }
-
-            foreach (Excel.Worksheet sheet in workbook.Worksheets)
-            {
-                if (string.Equals(SafeWorksheetName(sheet), target.WorksheetKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    return sheet;
-                }
-            }
-
-            return null;
-        }
-
-        private Excel.Worksheet ResolveWorksheetOrThrow(RangeTarget target)
-        {
-            var workbook = ResolveWorkbook(target);
-            if (workbook == null)
-            {
-                throw new HostOperationException("原工作簿已关闭，请重新执行。");
-            }
-
-            var worksheet = ResolveWorksheet(workbook, target);
-            if (worksheet == null)
-            {
-                throw new HostOperationException("原工作表已关闭或已重命名，请重新执行。");
-            }
-
-            return worksheet;
-        }
-
-        private static string BuildWorkbookKey(Excel.Workbook workbook)
-        {
-            try
-            {
-                var fullName = workbook.FullName;
-                if (!string.IsNullOrWhiteSpace(fullName))
-                {
-                    return fullName;
-                }
-            }
-            catch
-            {
-                // 某些宿主在特定状态下可能取不到 FullName，回退到名称。
-            }
-
-            try
-            {
-                return workbook.Name ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeWorksheetName(Excel.Worksheet worksheet)
-        {
-            try
-            {
-                return worksheet.Name ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static string SafeAddress(Excel.Range range)
-        {
-            try
-            {
-                return range.Address;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        private static int SafeRowCount(Excel.Range range)
-        {
-            try
-            {
-                return Convert.ToInt32(range.Rows.Count, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static int SafeColumnCount(Excel.Range range)
-        {
-            try
-            {
-                return Convert.ToInt32(range.Columns.Count, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static int SafeAreaCount(Excel.Range range)
-        {
-            try
-            {
-                return Convert.ToInt32(range.Areas.Count, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return 1;
-            }
-        }
-
-        private static bool IsSheetProtected(Excel.Worksheet worksheet)
-        {
-            try
-            {
-                return worksheet.ProtectContents;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private static bool DetectMergedCells(Excel.Range range, int rowCount, int columnCount)

@@ -137,6 +137,9 @@ IHostStateScope
 
 或拆分为等价的更小接口。`AccuX.Host` 负责实现这些接口。
 
+业务功能需要的宿主能力（目录、批注、标记等）遵循同一模式：Core 定义功能窄接口与纯 CLR 参数对象，
+`AccuX.Host` 在 `Features/` 提供实现类，见 §5.2“能力实现类的组织”。
+
 因此调用关系为：
 
 ```text
@@ -740,6 +743,25 @@ Excel/WPS 行为一致且调用简单
 
 `AccuX.Host` 的目标是建立一个轻量、稳定、可扩展的 Excel/WPS 兼容层，而不是重新实现一套 Excel/WPS Object Model。
 
+### 能力实现类的组织
+
+`AccuX.Host` 内部按“一个 Core 窄接口一个实现类”组织，共享机制放在 `ExcelHostBase`：
+
+```text
+ExcelHostBase                          共享 COM 基础设施：Application、工作簿/工作表解析、安全属性读取、状态作用域
+ExcelRangeOperationHost                IRangeOperationHost：批量读写与范围操作
+Features/ExcelWorkbookDirectoryHost    IWorkbookDirectoryHost：目录生成的 COM 机制
+Features/ExcelCellCommentHost          ICellCommentHost：批注读写
+Features/ExcelCellMarkHost             ICellMarkHost：可见单元格底色标记
+```
+
+需要 COM 的业务功能实现放在 `Features/`，且只负责 COM 机制。文案、配色、列宽等业务决定
+必须由模块通过参数对象（例如 `DirectoryOptions`）传入，Host 不内置功能专属常量；
+这样“功能长什么样”留在可单测的模块层，Host 只保留“怎么落到 COM 上”。
+
+窄接口与参数对象（DTO）都定义在 `AccuX.Core/Operations`，使用纯 CLR 类型，不携带 COM 引用。
+新增需要 COM 的功能时按此结构增加实现类，不要继续堆进 `ExcelRangeOperationHost`。
+
 ## 5.3 AccuX.Core
 
 `AccuX.Core` 只负责与具体业务模块无关、能够被多个模块复用的公共基础能力，以及 `RangeOperationPipeline` 所需的最小宿主抽象。
@@ -774,6 +796,10 @@ Operations/
     FormulaInfo
     IRangeOperationHost
     IHostStateScope
+    IHostContext
+    IWorkbookDirectoryHost / DirectoryOptions
+    ICellCommentHost / CellCommentTarget
+    ICellMarkHost
 
 Configuration/
     IConfigManager
@@ -1067,7 +1093,9 @@ public enum HostKind
 - 合并单元格和特殊区域判断；
 - 主窗口句柄；
 - `ScreenUpdating`、`Calculation`、`EnableEvents`、`DisplayAlerts` 等宿主状态管理；
-- 需要统一兼容行为或错误处理的高风险 COM 操作。
+- 需要统一兼容行为或错误处理的高风险 COM 操作；
+- 需要 COM 的业务功能实现（目录、批注、标记等，位于 `Features/`；文案与外观由模块通过
+  Core 参数对象提供，Host 不内置功能专属常量）。
 
 如果开发过程中发现原本认为一致的 API 在 Excel/WPS 中存在差异，应将能力收口到 `AccuX.Host`，并同步更新 `CompatibilityMatrix.md`。
 
@@ -2127,11 +2155,11 @@ Vibe Coding 必须遵循以下规则：
 
 1. Core 不引用 Excel/WPS Interop。
 2. Core 不引用 `AccuX.Host` 具体工程；`RangeOperationPipeline` 只依赖 Core 中定义的宿主抽象接口。
-3. `AccuX.Host` 可以引用 Core，并负责实现 `IRangeOperationHost`、`IHostStateScope` 等宿主接口。
+3. `AccuX.Host` 可以引用 Core，并负责实现 `IRangeOperationHost`、`IHostStateScope` 等宿主接口，以及 `Features/` 下的功能窄接口实现类。
 4. Core 只存放跨模块公共能力和 Pipeline 必需的最小宿主抽象，不存放某个模块专属业务 Service。
 5. 某项业务能力只有在两个或以上独立模块真实复用后，才考虑提升到 Core。
 6. `RoundingService`、`AmountConversionService`、`ChineseAmountService` 属于 BasicFinance，不得放入 Core。
-7. Excel/WPS 存在差异的宿主能力必须位于 `AccuX.Host`；经验证完全一致且调用简单的 API 不做无意义二次封装。
+7. Excel/WPS 存在差异的宿主能力必须位于 `AccuX.Host`；经验证完全一致且调用简单的 API 不做无意义二次封装。需要 COM 的业务功能实现放 `AccuX.Host/Features`，文案与外观由模块通过 Core 参数对象提供。
 8. Excel/WPS 差异不得进入业务模块。
 9. 所有财务算法使用纯 C#，并可脱离 Excel/WPS 单元测试。
 10. 财务金额计算优先使用 `decimal`。
@@ -2223,43 +2251,61 @@ AccuX
 │   └─ 显式模块注册
 │
 ├─ Host
+│   ├─ ExcelHostBase（共享 COM 基础设施）
 │   ├─ IRangeOperationHost 实现
 │   ├─ IHostStateScope 实现
 │   ├─ 宿主识别
 │   ├─ Excel/WPS 差异适配
 │   ├─ Value / Formula 批量读写
-│   └─ 宿主状态管理
+│   ├─ 宿主状态管理
+│   └─ Features/：目录 / 批注 / 标记的功能级 COM 实现
 │
 ├─ Core
 │   ├─ Modules
 │   │   └─ IAccuXModule
 │   ├─ Commands
-│   ├─ CellClassification
+│   ├─ Cells（CellValueClassifier）
 │   ├─ Operations
 │   │   ├─ RangeOperationPipeline
-│   │   ├─ IRangeOperationHost
-│   │   └─ IHostStateScope
+│   │   ├─ IRangeOperationHost / IHostStateScope
+│   │   └─ 功能窄接口与参数对象（IWorkbookDirectoryHost / DirectoryOptions 等）
 │   ├─ Configuration
 │   └─ Logging
 │
-└─ Modules.BasicFinance
-    ├─ Rounding
-    │   ├─ RoundingCommand
-    │   ├─ RoundingService
-    │   └─ RoundingOptions
-    │
-    ├─ AmountConversion
-    │   ├─ AmountConversionCommand
-    │   ├─ AmountConversionService
-    │   ├─ AmountConversionOptions
-    │   └─ WPF UI
-    │
-    ├─ ChineseAmount
-    │   ├─ ChineseAmountCommand
-    │   └─ ChineseAmountService
-    │
-    └─ Common
-        └─ FormulaTransformService
+├─ Modules.BasicFinance
+│   ├─ Rounding
+│   │   ├─ RoundingCommand
+│   │   ├─ RoundingService
+│   │   └─ RoundingOptions
+│   │
+│   ├─ AmountConversion
+│   │   ├─ AmountConversionCommand
+│   │   ├─ AmountConversionService
+│   │   ├─ AmountConversionOptions
+│   │   └─ WPF UI
+│   │
+│   ├─ ChineseAmount
+│   │   ├─ ChineseAmountCommand
+│   │   └─ ChineseAmountService
+│   │
+│   ├─ SelectionSum
+│   │   ├─ SelectionSumCommand
+│   │   └─ SelectionSumService
+│   │
+│   ├─ Directory
+│   │   ├─ DirectoryCommand
+│   │   └─ DirectoryTemplate（文案与外观参数）
+│   │
+│   ├─ Comment
+│   │   ├─ CommentCommand
+│   │   └─ CommentWindow
+│   │
+│   └─ Common
+│       └─ FormulaTransformService
+│
+└─ Modules.Mark
+    ├─ MarkCommand
+    └─ MarkModule
 ```
 
 发布工程：

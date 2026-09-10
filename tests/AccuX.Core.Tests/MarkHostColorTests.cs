@@ -13,7 +13,7 @@ namespace AccuX.Core.Tests
         [InlineData("#2db7f5", 0xf5b72d)]
         public void ParseOleColor_ConvertsHtmlRgbToExcelOleColor(string hexColor, int expected)
         {
-            Assert.Equal(expected, ExcelRangeOperationHost.ParseOleColor(hexColor));
+            Assert.Equal(expected, ExcelComHelper.ParseOleColor(hexColor));
         }
 
         [Theory]
@@ -25,7 +25,7 @@ namespace AccuX.Core.Tests
         public void ParseOleColor_RejectsInvalidColors(string hexColor)
         {
             var exception = Assert.Throws<HostOperationException>(
-                () => ExcelRangeOperationHost.ParseOleColor(hexColor));
+                () => ExcelComHelper.ParseOleColor(hexColor));
 
             Assert.Contains("#RRGGBB", exception.Message);
         }

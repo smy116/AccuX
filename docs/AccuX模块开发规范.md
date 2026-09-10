@@ -109,6 +109,8 @@ else { ... }
 
 同时，真实发现的兼容差异必须记录到项目的 `CompatibilityMatrix.md`，至少包含宿主类型、宿主版本、x86/x64、能力/API、验证结果和已知限制。
 
+如果确认不是宿主差异，而是某个业务功能新增的 COM 操作（目录、批注、标记这类），按 §20.1 处理：Core 加功能窄接口与参数 DTO，`AccuX.Host/Features` 加实现类。
+
 ### 2.4 需求确实是跨模块公共能力
 
 只有满足以下条件，才考虑修改 Core：
@@ -1012,7 +1014,7 @@ ValueConverter
 
 ---
 
-## 20. 什么时候允许扩展 `IRangeOperationHost`
+## 20. 什么时候允许扩展 Host / Core 宿主抽象
 
 只有 Pipeline 或多个业务模块真正需要某项宿主能力，而且该能力属于以下类别之一时，才扩展 Host / Core 宿主抽象：
 
@@ -1034,6 +1036,17 @@ Excel/WPS 存在实际差异
 6. 不因为新增一个业务功能就建立完整 `IWorkbook/IWorksheet/IRange` 影子对象模型。
 
 如果 Excel/WPS API 行为一致、调用简单，并且只在 Host/AddIn 边界内部使用，则无需额外抽象。
+
+### 20.1 单个业务功能需要 COM 时
+
+目录生成、批注、标记这类“属于某个业务功能的 COM 操作”不扩展 `IRangeOperationHost`，按以下流程落地：
+
+1. 在 `AccuX.Core/Operations` 定义**功能窄接口**（如 `IWorkbookDirectoryHost` / `ICellCommentHost` / `ICellMarkHost`）；
+2. 参数与结果使用 Core 的纯 CLR DTO（如 `DirectoryOptions` / `CellCommentTarget`），文案、配色、尺寸等业务决定由模块提供，Host 不内置功能专属常量；
+3. 在 `AccuX.Host/Features` 增加实现类，从 `ExcelHostBase` 继承共享 COM 机制（工作簿/工作表解析、安全属性读取、状态作用域）；
+4. AddIn 组合根为每个窄接口创建并注入独立实例。
+
+`IRangeOperationHost` 只保留 Pipeline 真正需要的范围读写能力，新功能不要往上加方法。
 
 ---
 
@@ -1065,6 +1078,8 @@ IAccuXModule / IAccuXContext
 CommandDefinition / CommandDispatcher
 RangeOperationPipeline
 IRangeOperationHost
+IWorkbookDirectoryHost / ICellCommentHost / ICellMarkHost
+DirectoryOptions / CellCommentTarget
 CellValueClassifier
 RangeTarget / RangeWritePlan / FormulaInfo
 IConfigManager
@@ -1096,6 +1111,9 @@ IHostStateScope
 - 补 Host 兼容实现；
 - 更新 CompatibilityMatrix；
 - 不把平台分支留在 Module。
+
+如果只是本功能需要的新 COM 操作，按 §20.1 处理：Core 加功能窄接口 + 参数 DTO，
+`AccuX.Host/Features` 加实现类，不扩展 `IRangeOperationHost`。
 
 ### 第 6 步：注册 Module 与 Ribbon
 
@@ -1326,6 +1344,7 @@ Agent 在宣布模块完成前，逐项检查：
    - 是否修改 Core：
    - 为什么必须修改：
    - 是否修改 Host：
+   - 新增/修改的宿主窄接口或 Features 实现类：
    - 对应 Excel/WPS 差异：
    - 是否更新 CompatibilityMatrix：
 
@@ -1363,6 +1382,7 @@ Agent 在宣布模块完成前，逐项检查：
 | 新功能放哪里？                           | 先放所属 Module                                          |
 | 是否提升 Core？                          | 否，除非已有真实跨模块复用                               |
 | 是否新增 Host Adapter？                  | 仅当发现真实宿主差异 / 公式安全 / COM 性能需求           |
+| 新功能需要 COM 怎么办？                  | Core 加功能窄接口 + 参数 DTO，Host/Features 加实现类，不扩展 IRangeOperationHost |
 | 是否新增模块动态发现？                   | 否                                                       |
 | 是否动态生成 Ribbon？                    | 否，使用静态 Ribbon XML                                  |
 | Range 目标怎么确定？                     | Command 开始时 CaptureTarget 一次                        |

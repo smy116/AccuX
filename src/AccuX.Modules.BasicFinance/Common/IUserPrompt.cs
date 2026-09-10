@@ -29,8 +29,8 @@ namespace AccuX.Modules.BasicFinance.Common
         /// </summary>
         bool ConfirmLargeSelection(RangeTarget target);
 
-        /// <summary>确认是否删除已存在的“目录”工作表并重新生成。</summary>
-        bool ConfirmReplaceDirectory();
+        /// <summary>确认是否删除已存在的同名“目录”工作表并重新生成。</summary>
+        bool ConfirmReplaceDirectory(string worksheetName);
 
         /// <summary>显示结果或错误提示。</summary>
         void ShowMessage(string message);

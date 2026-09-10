@@ -30,7 +30,7 @@ AccuX.sln
 ├─ build.ps1                    # 还原 + 构建 + 测试 + 依赖边界校验
 ├─ src/
 │  ├─ AccuX.Core                # 模块契约、命令分发、单元格分类、Range 管线、配置、日志
-│  ├─ AccuX.Host                # Excel/WPS 差异适配、批量读写、公式规范化、宿主状态
+│  ├─ AccuX.Host                # 宿主适配：差异、批量读写、公式规范化、宿主状态；Features/ 为功能级 COM 实现
 │  ├─ AccuX.Modules.BasicFinance# 基础功能 + 纯 C# 算法 + WPF 界面
 │  ├─ AccuX.Modules.Mark        # 选区可见单元格底色标记
 │  └─ AccuX.AddIn               # COM 入口、Ribbon、组合根、显式模块注册、图标
@@ -48,7 +48,7 @@ AccuX.sln
 
 ```
 AccuX.Core  ── 不引用 Host，不引用 Excel/WPS Interop
-AccuX.Host  ── 引用 Core，实现 IRangeOperationHost / IHostStateScope
+AccuX.Host  ── 引用 Core，实现 IRangeOperationHost / IHostStateScope 及功能窄接口（目录 / 批注 / 标记）
 AccuX.Modules.*  ── 引用 Core，不直接解决宿主差异
 AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
 ```

@@ -2,10 +2,18 @@ using System;
 using AccuX.Core.Operations;
 using Excel = Microsoft.Office.Interop.Excel;
 
-namespace AccuX.Host
+namespace AccuX.Host.Features
 {
-    public sealed partial class ExcelRangeOperationHost
+    /// <summary>
+    /// 单元格批注（备注）功能的宿主实现：只负责 COM 读写与目标解析，文案与交互由业务模块决定。
+    /// </summary>
+    public sealed class ExcelCellCommentHost : ExcelHostBase, ICellCommentHost
     {
+        public ExcelCellCommentHost(Excel.Application application)
+            : base(application)
+        {
+        }
+
         /// <summary>
         /// 固定传统批注目标的轻量选择路径。
         /// 这里只遍历 Areas 的首单元格，不读取选区值，也不套用批量处理上限。
@@ -139,7 +147,7 @@ namespace AccuX.Host
             Excel.Workbook workbook = null;
             try
             {
-                foreach (Excel.Workbook candidate in _application.Workbooks)
+                foreach (Excel.Workbook candidate in Application.Workbooks)
                 {
                     if (string.Equals(BuildWorkbookKey(candidate), target.WorkbookKey, StringComparison.OrdinalIgnoreCase))
                     {

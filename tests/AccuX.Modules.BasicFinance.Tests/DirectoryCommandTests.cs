@@ -29,6 +29,26 @@ namespace AccuX.Modules.BasicFinance.Tests
         }
 
         [Fact]
+        public void Execute_PassesDirectoryTemplateToHost()
+        {
+            var directoryHost = new RecordingDirectoryHost { GeneratedCount = 1 };
+            var prompt = new RecordingPrompt();
+
+            var result = Execute(directoryHost, prompt);
+
+            Assert.True(result.Success);
+            var options = directoryHost.LastOptions;
+            Assert.NotNull(options);
+            Assert.Equal("目录", options.WorksheetName);
+            Assert.Equal(new[] { "序号", "名称", "备注" }, options.Headers);
+            Assert.Equal(3, options.ColumnWidths.Length);
+            Assert.Equal(16, options.TitleFontSize);
+            Assert.Equal(30d, options.TitleRowHeight);
+            Assert.Equal("#143146", options.TitleBackgroundColor);
+            Assert.Equal("#0563C1", options.HyperlinkColor);
+        }
+
+        [Fact]
         public void Execute_ExistingDirectoryConfirmed_RegeneratesWithReplacement()
         {
             var directoryHost = new RecordingDirectoryHost
@@ -44,6 +64,7 @@ namespace AccuX.Modules.BasicFinance.Tests
             Assert.Equal("生成完成！共生成2个表格的目录。", result.Message);
             Assert.True(result.ShowMessage);
             Assert.Equal(1, prompt.ReplaceDirectoryConfirmCalls);
+            Assert.Equal("目录", prompt.ReplaceDirectoryWorksheetName);
             Assert.Equal(1, directoryHost.GenerateCalls);
             Assert.True(directoryHost.LastReplaceExisting);
         }
@@ -128,16 +149,19 @@ namespace AccuX.Modules.BasicFinance.Tests
 
         public bool LastReplaceExisting { get; private set; }
 
+        public DirectoryOptions LastOptions { get; private set; }
+
         public HostOperationException Failure { get; set; }
 
-        public bool DirectoryWorksheetExists()
+        public bool DirectoryWorksheetExists(string worksheetName)
         {
             return DirectoryExists;
         }
 
-        public int GenerateDirectory(bool replaceExisting)
+        public int GenerateDirectory(DirectoryOptions options, bool replaceExisting)
         {
             GenerateCalls++;
+            LastOptions = options;
             LastReplaceExisting = replaceExisting;
             if (Failure != null)
             {

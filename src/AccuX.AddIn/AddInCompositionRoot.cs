@@ -6,6 +6,7 @@ using AccuX.Core.Logging;
 using AccuX.Core.Modules;
 using AccuX.Core.Operations;
 using AccuX.Host;
+using AccuX.Host.Features;
 using AccuX.Modules.BasicFinance;
 using AccuX.Modules.BasicFinance.Common;
 using AccuX.Modules.BasicFinance.UI;
@@ -61,14 +62,26 @@ namespace AccuX.AddIn
                 MaxProcessCells = basicConfig.MaxProcessCells
             };
 
-            var host = new ExcelRangeOperationHost(_application, hostOptions);
-            var pipeline = new RangeOperationPipeline(host, Logger);
+            // Host 层：宿主差异与 COM 边界。一个 Core 窄接口对应一个实现类（规格 §5.2）。
+            var rangeHost = new ExcelRangeOperationHost(_application, hostOptions);
+            var directoryHost = new ExcelWorkbookDirectoryHost(_application);
+            var commentHost = new ExcelCellCommentHost(_application);
+            var markHost = new ExcelCellMarkHost(_application);
+            var pipeline = new RangeOperationPipeline(rangeHost, Logger);
 
-            var context = new ModuleContext(Config, Logger, host.Context, pipeline, AccuXVersion, host, host, host);
+            var context = new ModuleContext(
+                Config,
+                Logger,
+                rangeHost.Context,
+                pipeline,
+                AccuXVersion,
+                directoryHost,
+                commentHost,
+                markHost);
             Dispatcher = new CommandDispatcher(context, Logger);
 
             // 用户交互统一由 WPF 实现；模块通过 IUserPrompt 使用。
-            Prompt = new WpfUserPrompt(host.Context, basicConfig.LargeSelectionWarning, basicConfig.RoundDigits);
+            Prompt = new WpfUserPrompt(rangeHost.Context, basicConfig.LargeSelectionWarning, basicConfig.RoundDigits);
 
             // 显式模块注册（V1 不做目录扫描 / 反射发现 / 热加载）。
             _moduleRegistry = new ModuleRegistry(Logger);
