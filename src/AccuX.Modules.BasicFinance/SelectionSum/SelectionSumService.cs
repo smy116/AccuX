@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using AccuX.Core.Cells;
 using AccuX.Core.Operations;
+using AccuX.Modules.BasicFinance.ChineseAmount;
 using AccuX.Modules.BasicFinance.Rounding;
 
 namespace AccuX.Modules.BasicFinance.SelectionSum
@@ -12,11 +13,34 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
     /// </summary>
     public sealed class SelectionSumResult
     {
-        public SelectionSumResult(decimal rawTotal, decimal roundedTotal, string formattedTotal, int numericCellCount)
+        public SelectionSumResult(
+            decimal rawTotal,
+            decimal roundedTotal,
+            string formattedTotal,
+            int numericCellCount)
+            : this(
+                rawTotal,
+                roundedTotal,
+                formattedTotal,
+                (roundedTotal / 10000m).ToString("#,##0.00", CultureInfo.InvariantCulture),
+                ChineseAmountService.ToChineseAmount(roundedTotal),
+                numericCellCount)
+        {
+        }
+
+        public SelectionSumResult(
+            decimal rawTotal,
+            decimal roundedTotal,
+            string formattedTotal,
+            string formattedWanTotal,
+            string chineseTotal,
+            int numericCellCount)
         {
             RawTotal = rawTotal;
             RoundedTotal = roundedTotal;
             FormattedTotal = formattedTotal ?? string.Empty;
+            FormattedWanTotal = formattedWanTotal ?? string.Empty;
+            ChineseTotal = chineseTotal ?? string.Empty;
             NumericCellCount = numericCellCount;
         }
 
@@ -26,8 +50,14 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
         /// <summary>按两位小数、AwayFromZero 舍入后的总和。</summary>
         public decimal RoundedTotal { get; }
 
-        /// <summary>用于剪切板和成功提示的千分位文本。</summary>
+        /// <summary>用于“金额”复制项的千分位文本。</summary>
         public string FormattedTotal { get; }
+
+        /// <summary>合计折合为万元后的千分位文本。</summary>
+        public string FormattedWanTotal { get; }
+
+        /// <summary>按两位舍入后的合计对应的中文大写金额。</summary>
+        public string ChineseTotal { get; }
 
         /// <summary>实际参与求和的可见数字单元格数量。</summary>
         public int NumericCellCount { get; }
@@ -73,11 +103,16 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
 
             var roundedTotal = RoundingService.Round(rawTotal, RoundDigits);
             var formattedTotal = roundedTotal.ToString("#,##0.00", CultureInfo.InvariantCulture);
+            var formattedWanTotal = (roundedTotal / 10000m)
+                .ToString("#,##0.00", CultureInfo.InvariantCulture);
+            var chineseTotal = ChineseAmountService.ToChineseAmount(roundedTotal);
 
             return new SelectionSumResult(
                 rawTotal,
                 roundedTotal,
                 formattedTotal,
+                formattedWanTotal,
+                chineseTotal,
                 numericCellCount);
         }
     }

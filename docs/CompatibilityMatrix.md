@@ -36,10 +36,10 @@
 | 合并单元格识别 | Excel | 16.0 | x64 | 待验证 | `Range.MergeCells` |
 | NumberFormat 读取 | Excel | 16.0 | x64 | 待验证 | 用于日期识别 |
 | 隐藏行/列识别 | Excel | 16.0 | x64 | 待验证 | Host 读取 `Rows.Hidden` / `Columns.Hidden`，公共 Pipeline 跳过隐藏单元格 |
-| 选区求和 | Excel | 16.0 | x64 | 待验证 | 可见数字求和、两位舍入、千分位剪切板文本与提示框 |
+| 选区求和 | Excel | 16.0 | x64 | 待验证 | 可见数字求和、两位舍入、三格式复制对话框 |
 | 生成目录 | Excel | 16.0 | x64 | 通过 | 临时工作簿 COM 验证：仅列出可见工作表，目录插入首位，名称列使用内部超链接 |
 | 可见单元格底色标记 | Excel | 16.0 | x64 | 待验证 | 需验证四种颜色、隐藏行列跳过以及值/公式/数字格式保持不变 |
-| 剪切板复制 | Excel | 16.0 | x64 | 待验证 | 复制格式化合计数字；失败时不得显示成功提示 |
+| 剪切板复制 | Excel | 16.0 | x64 | 待验证 | 金额 / 万元金额 / 大写金额复制；失败时不显示 MsgBox |
 | ScreenUpdating | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | EnableEvents | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | DisplayAlerts | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
@@ -61,8 +61,8 @@
 | 隐藏行/列识别 | WPS | - | - | 未验证 | 需验证 `Rows.Hidden` / `Columns.Hidden` 返回值 |
 | 生成目录 | WPS | - | - | 未验证 | 需验证可见性、首位插入与内部超链接行为 |
 | 可见单元格底色标记 | WPS | - | - | 未验证 | 需验证 `Interior.Pattern` / `Interior.Color` 与隐藏行列处理 |
-| 选区求和 | WPS | - | - | 未验证 | 需验证可见数字求和、剪切板复制与提示框顺序 |
-| 剪切板复制 | WPS | - | - | 未验证 | 本机未安装 WPS |
+| 选区求和 | WPS | - | - | 未验证 | 需验证可见数字求和、三格式复制对话框与窗口关闭行为 |
+| 剪切板复制 | WPS | - | - | 未验证 | 本机未安装 WPS；需验证三种格式复制 |
 | Ribbon callback | WPS | - | - | 未验证 | 本机未安装 WPS |
 | WPF Window | WPS | - | - | 未验证 | 本机未安装 WPS |
 

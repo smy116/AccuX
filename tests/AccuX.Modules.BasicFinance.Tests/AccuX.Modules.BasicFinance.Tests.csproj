@@ -4,6 +4,7 @@
     <RootNamespace>AccuX.Modules.BasicFinance.Tests</RootNamespace>
     <AssemblyName>AccuX.Modules.BasicFinance.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>

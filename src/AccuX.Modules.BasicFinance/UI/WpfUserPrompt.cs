@@ -5,6 +5,7 @@ using AccuX.Modules.BasicFinance.AmountConversion;
 using AccuX.Modules.BasicFinance.Common;
 using AccuX.Modules.BasicFinance.Comment;
 using AccuX.Modules.BasicFinance.Rounding;
+using AccuX.Modules.BasicFinance.SelectionSum;
 using AccuX.Modules.BasicFinance.UI;
 
 namespace AccuX.Modules.BasicFinance.UI
@@ -46,6 +47,20 @@ namespace AccuX.Modules.BasicFinance.UI
             var window = new AmountConversionView(OwnerHandle, viewModel);
             var accepted = window.ShowDialog();
             return accepted == true ? window.Options : null;
+        }
+
+        public SelectionSumDialogResult ShowSelectionSumDialog(SelectionSumResult result)
+        {
+            if (result == null)
+            {
+                return SelectionSumDialogResult.Cancelled();
+            }
+
+            var window = new SelectionSumWindow(result, OwnerHandle, TryCopyToClipboard);
+            var accepted = window.ShowDialog();
+            return accepted == true && window.Result != null
+                ? window.Result
+                : SelectionSumDialogResult.Cancelled();
         }
 
         public CommentDialogResult AskComment(CommentContent existing)

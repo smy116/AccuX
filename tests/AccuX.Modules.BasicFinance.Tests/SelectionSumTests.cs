@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Windows;
+using System.Windows.Controls;
 using AccuX.Core.Cells;
 using AccuX.Core.Commands;
 using AccuX.Core.Configuration;
@@ -36,6 +39,8 @@ namespace AccuX.Modules.BasicFinance.Tests
             Assert.Equal(1234.567m, result.RawTotal);
             Assert.Equal(1234.57m, result.RoundedTotal);
             Assert.Equal("1,234.57", result.FormattedTotal);
+            Assert.Equal("0.12", result.FormattedWanTotal);
+            Assert.Equal("壹仟贰佰叁拾肆元伍角柒分", result.ChineseTotal);
             Assert.Equal(2, result.NumericCellCount);
         }
 
@@ -51,6 +56,8 @@ namespace AccuX.Modules.BasicFinance.Tests
             Assert.Equal(1.005m, result.RawTotal);
             Assert.Equal(1.01m, result.RoundedTotal);
             Assert.Equal("1.01", result.FormattedTotal);
+            Assert.Equal("0.00", result.FormattedWanTotal);
+            Assert.Equal("壹元零壹分", result.ChineseTotal);
         }
 
         [Fact]
@@ -77,6 +84,8 @@ namespace AccuX.Modules.BasicFinance.Tests
             Assert.Equal(0m, result.RawTotal);
             Assert.Equal(0m, result.RoundedTotal);
             Assert.Equal("0.00", result.FormattedTotal);
+            Assert.Equal("0.00", result.FormattedWanTotal);
+            Assert.Equal("零元整", result.ChineseTotal);
             Assert.Equal(0, result.NumericCellCount);
         }
 
@@ -113,7 +122,7 @@ namespace AccuX.Modules.BasicFinance.Tests
     public class SelectionSumCommandTests
     {
         [Fact]
-        public void Execute_ReadsOnceCopiesFormattedTotalAndReturnsExactMessage()
+        public void Execute_ReadsOnceShowsDialogAndSuppressesGlobalMessage()
         {
             var host = new RecordingHost(new List<CellData>
             {
@@ -129,12 +138,15 @@ namespace AccuX.Modules.BasicFinance.Tests
             var result = definition.Handler(new CommandExecutionContext(definition, context));
 
             Assert.True(result.Success);
-            Assert.Equal("选定区域合计1,234.57，已复制至剪切板。", result.Message);
-            Assert.Equal("1,234.57", prompt.CopiedText);
+            Assert.False(result.ShowMessage);
+            Assert.Equal(1, prompt.DialogCalls);
+            Assert.Equal("1,234.57", prompt.DialogInput.FormattedTotal);
+            Assert.Equal("0.12", prompt.DialogInput.FormattedWanTotal);
+            Assert.Equal("壹仟贰佰叁拾肆元伍角柒分", prompt.DialogInput.ChineseTotal);
             Assert.Equal(1, host.CaptureCalls);
             Assert.Equal(1, host.ReadCalls);
             Assert.Equal(1, prompt.ConfirmCalls);
-            Assert.Equal(1, prompt.CopyCalls);
+            Assert.Equal(0, prompt.CopyCalls);
         }
 
         [Fact]
@@ -144,7 +156,12 @@ namespace AccuX.Modules.BasicFinance.Tests
             {
                 Cell(0, 0, CellValueType.ConstantNumber, 12m)
             }, 1, 1);
-            var prompt = new RecordingPrompt { CopyResult = false };
+            var prompt = new RecordingPrompt
+            {
+                DialogResult = SelectionSumDialogResult.CopyAttempted(
+                    SelectionSumCopyKind.Amount,
+                    false)
+            };
             var context = CreateContext(host);
             var command = new SelectionSumCommand(prompt);
             var definition = command.CreateDefinition("test.module");
@@ -152,9 +169,33 @@ namespace AccuX.Modules.BasicFinance.Tests
             var result = definition.Handler(new CommandExecutionContext(definition, context));
 
             Assert.False(result.Success);
-            Assert.Equal("合计已计算，但复制至剪切板失败，请重试。", result.Message);
-            Assert.DoesNotContain("已复制", result.Message);
-            Assert.Equal("12.00", prompt.CopiedText);
+            Assert.False(result.ShowMessage);
+            Assert.Equal("复制至剪切板失败，请重试。", result.Message);
+            Assert.Equal(1, prompt.DialogCalls);
+            Assert.Equal(0, prompt.CopyCalls);
+        }
+
+        [Fact]
+        public void Execute_DialogCancellationSkipsCopyAndGlobalMessage()
+        {
+            var host = new RecordingHost(new List<CellData>
+            {
+                Cell(0, 0, CellValueType.ConstantNumber, 12m)
+            }, 1, 1);
+            var prompt = new RecordingPrompt
+            {
+                DialogResult = SelectionSumDialogResult.Cancelled()
+            };
+            var context = CreateContext(host);
+            var command = new SelectionSumCommand(prompt);
+            var definition = command.CreateDefinition("test.module");
+
+            var result = definition.Handler(new CommandExecutionContext(definition, context));
+
+            Assert.True(result.Success);
+            Assert.False(result.ShowMessage);
+            Assert.Equal(1, prompt.DialogCalls);
+            Assert.Equal(0, prompt.CopyCalls);
         }
 
         [Fact]
@@ -194,8 +235,10 @@ namespace AccuX.Modules.BasicFinance.Tests
             var result = definition.Handler(new CommandExecutionContext(definition, context));
 
             Assert.True(result.Success);
-            Assert.Equal("0.00", prompt.CopiedText);
-            Assert.Equal("选定区域合计0.00，已复制至剪切板。", result.Message);
+            Assert.False(result.ShowMessage);
+            Assert.Equal("0.00", prompt.DialogInput.FormattedTotal);
+            Assert.Equal("0.00", prompt.DialogInput.FormattedWanTotal);
+            Assert.Equal("零元整", prompt.DialogInput.ChineseTotal);
         }
 
         [Fact]
@@ -246,17 +289,135 @@ namespace AccuX.Modules.BasicFinance.Tests
         }
     }
 
+    public class SelectionSumWindowTests
+    {
+        [Theory]
+        [InlineData("AmountButton", "1,234.57", SelectionSumCopyKind.Amount)]
+        [InlineData("WanAmountButton", "0.12", SelectionSumCopyKind.WanAmount)]
+        [InlineData("ChineseAmountButton", "壹仟贰佰叁拾肆元伍角柒分", SelectionSumCopyKind.ChineseAmount)]
+        public void CopyButton_CopiesExpectedValueAndClosesWindow(
+            string buttonName,
+            string expectedText,
+            SelectionSumCopyKind expectedKind)
+        {
+            Exception failure = null;
+            string copiedText = null;
+            SelectionSumDialogResult dialogResult = null;
+
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    var window = new SelectionSumWindow(
+                        CreateResult(),
+                        IntPtr.Zero,
+                        text =>
+                        {
+                            copiedText = text;
+                            return true;
+                        });
+
+                    window.Loaded += (_, __) =>
+                    {
+                        Assert.True(((TextBox)window.FindName("AmountBox")).IsReadOnly);
+                        Assert.True(((TextBox)window.FindName("WanAmountBox")).IsReadOnly);
+                        Assert.True(((TextBox)window.FindName("ChineseAmountBox")).IsReadOnly);
+
+                        var button = (Button)window.FindName(buttonName);
+                        Assert.NotNull(button);
+                        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    };
+
+                    window.ShowDialog();
+                    dialogResult = window.Result;
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            Assert.Null(failure);
+            Assert.NotNull(dialogResult);
+            Assert.False(dialogResult.WasCancelled);
+            Assert.Equal(expectedKind, dialogResult.CopyKind);
+            Assert.True(dialogResult.CopySucceeded);
+            Assert.Equal(expectedText, copiedText);
+        }
+
+        [Fact]
+        public void CopyFailure_StillClosesWindowWithoutMessageBox()
+        {
+            Exception failure = null;
+            SelectionSumDialogResult dialogResult = null;
+
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    var window = new SelectionSumWindow(
+                        CreateResult(),
+                        IntPtr.Zero,
+                        text => false);
+
+                    window.Loaded += (_, __) =>
+                    {
+                        var button = (Button)window.FindName("AmountButton");
+                        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    };
+
+                    window.ShowDialog();
+                    dialogResult = window.Result;
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            Assert.Null(failure);
+            Assert.NotNull(dialogResult);
+            Assert.False(dialogResult.WasCancelled);
+            Assert.Equal(SelectionSumCopyKind.Amount, dialogResult.CopyKind);
+            Assert.False(dialogResult.CopySucceeded);
+        }
+
+        private static SelectionSumResult CreateResult()
+        {
+            return new SelectionSumResult(
+                1234.567m,
+                1234.57m,
+                "1,234.57",
+                "0.12",
+                "壹仟贰佰叁拾肆元伍角柒分",
+                2);
+        }
+    }
+
     internal sealed class RecordingPrompt : IUserPrompt
     {
         public bool ConfirmResult { get; set; } = true;
 
         public bool CopyResult { get; set; } = true;
 
+        public SelectionSumDialogResult DialogResult { get; set; } =
+            SelectionSumDialogResult.CopyAttempted(SelectionSumCopyKind.Amount, true);
+
         public int ConfirmCalls { get; private set; }
 
         public int CopyCalls { get; private set; }
 
-        public string CopiedText { get; private set; }
+        public int DialogCalls { get; private set; }
+
+        public SelectionSumResult DialogInput { get; private set; }
 
         public RoundingOptions AskRoundingOptions(RangeTarget target)
         {
@@ -266,6 +427,13 @@ namespace AccuX.Modules.BasicFinance.Tests
         public AmountConversionOptions AskAmountConversionOptions(RangeTarget target)
         {
             return null;
+        }
+
+        public SelectionSumDialogResult ShowSelectionSumDialog(SelectionSumResult result)
+        {
+            DialogCalls++;
+            DialogInput = result;
+            return DialogResult;
         }
 
         public bool ConfirmLargeSelection(RangeTarget target)
@@ -285,7 +453,6 @@ namespace AccuX.Modules.BasicFinance.Tests
         public bool TryCopyToClipboard(string text)
         {
             CopyCalls++;
-            CopiedText = text;
             return CopyResult;
         }
     }

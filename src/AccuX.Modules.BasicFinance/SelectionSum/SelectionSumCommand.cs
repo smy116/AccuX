@@ -8,7 +8,7 @@ using AccuX.Modules.BasicFinance.Common;
 namespace AccuX.Modules.BasicFinance.SelectionSum
 {
     /// <summary>
-    /// 选区求和命令：只读当前选区，将可见数字合计复制到剪切板。
+    /// 选区求和命令：只读当前选区，显示金额的多格式复制窗口。
     /// </summary>
     public sealed class SelectionSumCommand
     {
@@ -28,7 +28,7 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
                 "选区求和",
                 moduleId,
                 Execute,
-                "计算当前选区内可见数字合计并复制到剪切板。",
+                "计算当前选区内可见数字合计，提供金额、万元金额和大写金额复制。",
                 CommandId);
         }
 
@@ -56,18 +56,31 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
             {
                 var readResult = context.Pipeline.Read(rangeTarget);
                 var sum = SelectionSumService.Calculate(readResult.Cells);
+                var dialogResult = _prompt.ShowSelectionSumDialog(sum);
 
-                if (!_prompt.TryCopyToClipboard(sum.FormattedTotal))
+                if (dialogResult == null || dialogResult.WasCancelled)
                 {
                     stopwatch.Stop();
-                    LogOperation(context, execution.Definition.ModuleId, rangeTarget, stopwatch.Elapsed, "copy-failed", null);
-                    return CommandResult.Failed("合计已计算，但复制至剪切板失败，请重试。");
+                    LogOperation(context, execution.Definition.ModuleId, rangeTarget, stopwatch.Elapsed, "cancelled", null);
+                    return CommandResult.Cancelled();
                 }
 
                 stopwatch.Stop();
-                LogOperation(context, execution.Definition.ModuleId, rangeTarget, stopwatch.Elapsed, "copied", null);
+                var result = dialogResult.CopySucceeded
+                    ? "copied-" + GetCopyKindLogName(dialogResult.CopyKind)
+                    : "copy-failed-" + GetCopyKindLogName(dialogResult.CopyKind);
+                LogOperation(context, execution.Definition.ModuleId, rangeTarget, stopwatch.Elapsed, result, null);
 
-                return CommandResult.Ok("选定区域合计" + sum.FormattedTotal + "，已复制至剪切板。");
+                if (!dialogResult.CopySucceeded)
+                {
+                    var failure = CommandResult.Failed("复制至剪切板失败，请重试。");
+                    failure.ShowMessage = false;
+                    return failure;
+                }
+
+                var success = CommandResult.Ok();
+                success.ShowMessage = false;
+                return success;
             }
             catch (HostOperationException ex)
             {
@@ -80,6 +93,21 @@ namespace AccuX.Modules.BasicFinance.SelectionSum
                 stopwatch.Stop();
                 LogOperation(context, execution.Definition.ModuleId, rangeTarget, stopwatch.Elapsed, "failed", ex);
                 return CommandResult.Failed("操作失败：" + ex.Message, ex);
+            }
+        }
+
+        private static string GetCopyKindLogName(SelectionSumCopyKind copyKind)
+        {
+            switch (copyKind)
+            {
+                case SelectionSumCopyKind.Amount:
+                    return "amount";
+                case SelectionSumCopyKind.WanAmount:
+                    return "wan-amount";
+                case SelectionSumCopyKind.ChineseAmount:
+                    return "chinese-amount";
+                default:
+                    return "unknown";
             }
         }
 

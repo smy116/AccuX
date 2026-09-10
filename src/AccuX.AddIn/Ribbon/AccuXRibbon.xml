@@ -2,7 +2,7 @@
 <customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="OnRibbonLoad">
   <ribbon>
     <tabs>
-      <tab id="AccuXTab" label="AccuX">
+      <tab id="AccuXTab" label="AccuX" insertAfterMso="TabHome">
         <group id="AccuXBasicFinanceGroup" label="基础功能">
           <button id="accux.basic.round"
                   label="一键舍入"

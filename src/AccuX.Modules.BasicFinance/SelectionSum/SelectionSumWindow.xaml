@@ -1,0 +1,90 @@
+<Window x:Class="AccuX.Modules.BasicFinance.SelectionSum.SelectionSumWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选区求和"
+        Width="620"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Grid.Column="0"
+                   Text="金额"
+                   Width="72"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,8" />
+        <TextBox x:Name="AmountBox"
+                 Grid.Row="0"
+                 Grid.Column="1"
+                 IsReadOnly="True"
+                 Padding="6,4"
+                 VerticalContentAlignment="Center"
+                 HorizontalScrollBarVisibility="Auto"
+                 Margin="0,0,12,8" />
+        <Button x:Name="AmountButton"
+                Grid.Row="0"
+                Grid.Column="2"
+                Content="复制金额"
+                Width="112"
+                Height="28"
+                Margin="0,0,0,8"
+                Click="OnCopyAmount" />
+
+        <TextBlock Grid.Row="1"
+                   Grid.Column="0"
+                   Text="万元金额"
+                   Width="72"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,8" />
+        <TextBox x:Name="WanAmountBox"
+                 Grid.Row="1"
+                 Grid.Column="1"
+                 IsReadOnly="True"
+                 Padding="6,4"
+                 VerticalContentAlignment="Center"
+                 HorizontalScrollBarVisibility="Auto"
+                 Margin="0,0,12,8" />
+        <Button x:Name="WanAmountButton"
+                Grid.Row="1"
+                Grid.Column="2"
+                Content="复制万元金额"
+                Width="112"
+                Height="28"
+                Margin="0,0,0,8"
+                Click="OnCopyWanAmount" />
+
+        <TextBlock Grid.Row="2"
+                   Grid.Column="0"
+                   Text="大写金额"
+                   Width="72"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,0" />
+        <TextBox x:Name="ChineseAmountBox"
+                 Grid.Row="2"
+                 Grid.Column="1"
+                 IsReadOnly="True"
+                 Padding="6,4"
+                 VerticalContentAlignment="Center"
+                 HorizontalScrollBarVisibility="Auto"
+                 Margin="0,0,12,0" />
+        <Button x:Name="ChineseAmountButton"
+                Grid.Row="2"
+                Grid.Column="2"
+                Content="复制大写金额"
+                Width="112"
+                Height="28"
+                Click="OnCopyChineseAmount" />
+    </Grid>
+</Window>

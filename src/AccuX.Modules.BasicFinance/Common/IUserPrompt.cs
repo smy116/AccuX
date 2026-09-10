@@ -1,6 +1,7 @@
 using AccuX.Core.Operations;
 using AccuX.Modules.BasicFinance.AmountConversion;
 using AccuX.Modules.BasicFinance.Rounding;
+using AccuX.Modules.BasicFinance.SelectionSum;
 
 namespace AccuX.Modules.BasicFinance.Common
 {
@@ -18,6 +19,9 @@ namespace AccuX.Modules.BasicFinance.Common
 
         /// <summary>弹出金额折合窗口；用户取消返回 null。</summary>
         AmountConversionOptions AskAmountConversionOptions(RangeTarget target);
+
+        /// <summary>显示选区求和的多格式复制窗口。</summary>
+        SelectionSumDialogResult ShowSelectionSumDialog(SelectionSumResult result);
 
         /// <summary>
         /// 选区超过 largeSelectionWarning 时确认是否继续。
