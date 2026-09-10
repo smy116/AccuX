@@ -8,7 +8,7 @@ namespace AccuX.Modules.Compare
 
         public string FirstOnlyColor { get; set; } = "#FFFF66";
 
-        public string SecondOnlyColor { get; set; } = "#FF9999";
+        public string SecondOnlyColor { get; set; } = "#FFFF66";
 
         public string SameColor { get; set; } = "#CCFFCC";
     }

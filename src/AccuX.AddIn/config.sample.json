@@ -8,7 +8,7 @@
     "largeSelectionWarning": 100000,
     "maxProcessCells": 500000,
     "firstOnlyColor": "#FFFF66",
-    "secondOnlyColor": "#FF9999",
+    "secondOnlyColor": "#FFFF66",
     "sameColor": "#CCFFCC"
   }
 }
