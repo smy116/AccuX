@@ -134,6 +134,7 @@ namespace AccuX.Modules.BasicFinance.Tests
             var result = Execute(command, host);
 
             Assert.True(result.Success);
+            Assert.False(result.ShowMessage);
             Assert.Equal("新批注", host.SavedText);
             Assert.Equal(1, host.CaptureCalls);
             Assert.Equal(1, host.ReadCalls);

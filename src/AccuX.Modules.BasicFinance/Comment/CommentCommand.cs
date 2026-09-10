@@ -160,7 +160,10 @@ namespace AccuX.Modules.BasicFinance.Comment
             try
             {
                 host.SaveComment(target, encoded);
-                return CommandResult.Ok("批注已保存。");
+                // 保存后编辑窗口即关闭，不再弹出“批注已保存”提示。
+                var saved = CommandResult.Ok();
+                saved.ShowMessage = false;
+                return saved;
             }
             catch (HostOperationException ex)
             {

@@ -112,6 +112,31 @@ New-AccuXIcon -Path (Join-Path $OutputDirectory 'directory.png') -AccentColor ([
     $g.DrawLine($pen, 17, 22, 21, 22)
 }
 
+# Comment assistant: a speech bubble with three text dots.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'comment.png') -AccentColor ([System.Drawing.Color]::FromArgb(255, 255, 193, 87)) -DrawSymbol {
+    param($g, $pen, $brush, $accent, $accentBrush)
+    # 尾巴并入轮廓路径，避免在 32px 下被描边填成实心楔形。
+    # 注意：GraphicsPath.AddLine(x, y) 会被 PowerShell 误绑到带默认 0 的重载，
+    # 这里统一用 AddLines + PointF 传入。
+    $bubble = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $bubble.AddArc(6, 7, 8, 8, 180, 90)
+    $bubble.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(22, 7))))
+    $bubble.AddArc(18, 7, 8, 8, 270, 90)
+    $bubble.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(26, 18))))
+    $bubble.AddArc(18, 14, 8, 8, 0, 90)
+    $bubble.AddLines([System.Drawing.PointF[]]@(
+        (New-Object System.Drawing.PointF(15, 22)),
+        (New-Object System.Drawing.PointF(10, 27)),
+        (New-Object System.Drawing.PointF(9, 22))))
+    $bubble.AddArc(6, 14, 8, 8, 90, 90)
+    $bubble.CloseFigure()
+    $g.DrawPath($pen, $bubble)
+    $g.FillEllipse($accentBrush, 10, 13, 3, 3)
+    $g.FillEllipse($accentBrush, 15, 13, 3, 3)
+    $g.FillEllipse($accentBrush, 20, 13, 3, 3)
+    $bubble.Dispose()
+}
+
 function New-AccuXTextIcon {
     param(
         [string]$Path,

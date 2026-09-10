@@ -61,7 +61,7 @@ namespace AccuX.AddIn.Ribbon
                 case "accux.basic.directory":
                     return "directory.png";
                 case "accux.basic.comment":
-                    return "sum.png";
+                    return "comment.png";
                 case "accux.mark.green":
                     return "mark-green.png";
                 case "accux.mark.red":
