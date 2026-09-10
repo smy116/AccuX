@@ -113,11 +113,10 @@ const
 
   { .NET Framework 4.8 Web 安装程序（ndp48-web.exe，约 1.5 MB）。
     fwlink 会 302 重定向到 download.visualstudio.microsoft.com，Inno 下载函数自动跟随。
-    若微软重新发布该引导程序导致 SHA-256 变化，下载会失败并给出人工安装提示，
-    此时请更新下面的 Ndp48Sha256 常量。 }
+    刻意不校验 SHA-256：微软重发该引导程序会改变文件哈希，固定哈希会导致安装硬失败；
+    完整性依赖 HTTPS 传输与微软官方 fwlink 地址。 }
   Ndp48Url = 'https://go.microsoft.com/fwlink/?LinkId=2085155';
   Ndp48BaseName = 'ndp48-web.exe';
-  Ndp48Sha256 = '0bba3094588c4bfec301939985222a20b340bf03431563dec8b2b4478b06fffa';
 
 type
   TFileBackup = record
@@ -271,7 +270,7 @@ begin
   PrerequisiteError := '';
 
   DownloadPage.Clear;
-  DownloadPage.Add(Ndp48Url, Ndp48BaseName, Ndp48Sha256);
+  DownloadPage.Add(Ndp48Url, Ndp48BaseName, '');
   DownloadPage.Show;
   try
     try
