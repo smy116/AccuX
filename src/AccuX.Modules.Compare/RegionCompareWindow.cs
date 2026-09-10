@@ -47,7 +47,7 @@ namespace AccuX.Modules.Compare
             _config = config ?? new CompareConfig();
             _logger = logger ?? NullLogger.Instance;
 
-            Title = "区域对比 - 存在对比";
+            Title = "区域对比";
             Width = 980;
             Height = 650;
             MinWidth = 760;
@@ -105,15 +105,18 @@ namespace AccuX.Modules.Compare
             _sameList = CreateResultList("相同项", 2, resultGrid);
             Grid.SetRow(resultGrid, 2); root.Children.Add(resultGrid);
 
-            var footer = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var footer = new Grid { Margin = new Thickness(0, 10, 0, 0), MinHeight = 32 };
+            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _summaryText = new TextBlock { Text = "请分别捕获两个区域后点击“对比”。", VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-            DockPanel.SetDock(_summaryText, Dock.Left); footer.Children.Add(_summaryText);
+            Grid.SetColumn(_summaryText, 0); footer.Children.Add(_summaryText);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             buttons.Children.Add(CreateButton("对比", Compare));
             buttons.Children.Add(CreateButton("标记不同", MarkDifferent));
             buttons.Children.Add(CreateButton("标记相同", MarkSame));
             buttons.Children.Add(CreateButton("清除标记", ClearMarks));
             buttons.Children.Add(CreateButton("导出结果", Export));
+            Grid.SetColumn(buttons, 1);
             Grid.SetRow(footer, 3); root.Children.Add(footer);
             Content = root;
         }
