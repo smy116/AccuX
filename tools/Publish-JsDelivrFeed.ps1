@@ -65,14 +65,25 @@ try {
             throw 'gh 未能配置 git 凭据。'
         }
 
-        & git fetch --depth=1 origin "refs/heads/$Branch:refs/remotes/origin/$Branch" 2>&1
-        $fetchExitCode = $LASTEXITCODE
-        if ($fetchExitCode -eq 0) {
-            Invoke-Git checkout -B $Branch "refs/remotes/origin/$Branch"
+        # PowerShell 会把 "$Branch:" 解析成特殊变量语法，必须先拆出完整 ref，
+        # 否则实际传给 Git 的 refspec 会丢失分支名后的冒号和 refs 前缀。
+        $branchRef = "refs/heads/$Branch"
+        $trackingRef = "refs/remotes/origin/$Branch"
+        $fetchRefspec = "${branchRef}:${trackingRef}"
+
+        $remoteBranchOutput = & git ls-remote --exit-code --heads origin $branchRef 2>&1
+        $remoteBranchExitCode = $LASTEXITCODE
+        if ($remoteBranchExitCode -eq 0) {
+            Invoke-Git fetch --depth=1 origin $fetchRefspec
+            Invoke-Git checkout -B $Branch $trackingRef
         }
-        else {
+        elseif ($remoteBranchExitCode -eq 2) {
             Write-Host "未找到 $Branch 分支，将创建新的 jsDelivr 更新分支。"
             Invoke-Git checkout --orphan $Branch
+        }
+        else {
+            $remoteBranchDetails = ($remoteBranchOutput -join [Environment]::NewLine)
+            throw "无法检查远端 $Branch 分支：$remoteBranchDetails"
         }
 
         $releaseDirectory = Join-Path $tempRoot "releases\$Version"
@@ -115,7 +126,7 @@ try {
         Invoke-Git config user.name 'github-actions[bot]'
         Invoke-Git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
         Invoke-Git commit -m "chore: publish AccuX $Version jsDelivr feed"
-        Invoke-Git push origin "HEAD:refs/heads/$Branch"
+        Invoke-Git push origin "HEAD:$branchRef"
         Write-Host "已发布 jsDelivr 更新清单：https://cdn.jsdelivr.net/gh/$Repository@$Branch/latest.json"
     }
     finally {

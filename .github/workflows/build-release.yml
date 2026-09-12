@@ -237,6 +237,10 @@ jobs:
       - prepare
       - build
     runs-on: windows-2022
+    # 所有 Release 都共享 update-feed 分支，必须串行读取和推送，避免非快进冲突。
+    concurrency:
+      group: accux-update-feed
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
