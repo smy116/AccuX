@@ -6,6 +6,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using AccuX.Core.Cells;
+using AccuX.Core.Configuration;
 using AccuX.Core.Logging;
 using AccuX.Core.Operations;
 
@@ -19,6 +20,7 @@ namespace AccuX.Modules.Compare
         private readonly IRegionCompareHost _host;
         private readonly RegionCompareService _service;
         private readonly CompareConfig _config;
+        private readonly Func<AccuXSettings> _settingsProvider;
         private readonly ILogger _logger;
         private readonly TextBlock _firstTargetText;
         private readonly TextBlock _secondTargetText;
@@ -40,11 +42,13 @@ namespace AccuX.Modules.Compare
             RegionCompareService service,
             CompareConfig config,
             ILogger logger,
-            IntPtr? ownerHandle = null)
+            IntPtr? ownerHandle = null,
+            Func<AccuXSettings> settingsProvider = null)
         {
             _host = host ?? throw new ArgumentNullException(nameof(host));
             _service = service ?? throw new ArgumentNullException(nameof(service));
             _config = config ?? new CompareConfig();
+            _settingsProvider = settingsProvider ?? AccuXSettings.CreateDefault;
             _logger = logger ?? NullLogger.Instance;
 
             Title = "区域对比";
@@ -199,12 +203,18 @@ namespace AccuX.Modules.Compare
                 if (!_host.ValidateTarget(_firstTarget, false, out var firstMessage)) { ShowError(firstMessage); return; }
                 if (!_host.ValidateTarget(_secondTarget, false, out var secondMessage)) { ShowError(secondMessage); return; }
                 var total = _firstTarget.CellCount + _secondTarget.CellCount;
-                if (total > _config.MaxProcessCells)
+                var settings = _settingsProvider() ?? AccuXSettings.CreateDefault();
+                if (!settings.TryValidate(out _))
                 {
-                    ShowError("两个区域合计包含 " + total + " 个单元格，超过上限 " + _config.MaxProcessCells + "。");
+                    settings = AccuXSettings.CreateDefault();
+                }
+
+                if (total > settings.MaxProcessCells)
+                {
+                    ShowError("两个区域合计包含 " + total + " 个单元格，超过上限 " + settings.MaxProcessCells + "。");
                     return;
                 }
-                if (total > _config.LargeSelectionWarning)
+                if (total > settings.LargeSelectionWarning)
                 {
                     var choice = MessageBox.Show(this, "两个区域合计包含 " + total + " 个单元格，继续比较可能需要较长时间，是否继续？", "AccuX", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                     if (choice != MessageBoxResult.Yes) return;

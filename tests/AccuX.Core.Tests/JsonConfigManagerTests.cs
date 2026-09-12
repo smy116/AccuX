@@ -74,6 +74,21 @@ namespace AccuX.Core.Tests
         }
 
         [Fact]
+        public void SaveSection_PreservesOtherSectionsAndUsesCamelCase()
+        {
+            File.WriteAllText(_path, "{\"otherSection\":{\"keepMe\":true}}");
+
+            var manager = new JsonConfigManager(_path);
+            manager.SaveSection("settings", new NamedSection { SomeValue = 12 });
+
+            var json = File.ReadAllText(_path);
+            Assert.Contains("\"otherSection\"", json);
+            Assert.Contains("\"keepMe\": true", json);
+            Assert.Contains("\"someValue\": 12", json);
+            Assert.DoesNotContain("SomeValue", json);
+        }
+
+        [Fact]
         public void Reload_PicksUpExternalChanges()
         {
             var manager = new JsonConfigManager(_path);
@@ -88,6 +103,11 @@ namespace AccuX.Core.Tests
         private sealed class TestSection
         {
             public int Value { get; set; }
+        }
+
+        private sealed class NamedSection
+        {
+            public int SomeValue { get; set; }
         }
     }
 }

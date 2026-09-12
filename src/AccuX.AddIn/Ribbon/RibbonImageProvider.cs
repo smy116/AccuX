@@ -72,6 +72,8 @@ namespace AccuX.AddIn.Ribbon
                     return "mark-blue.png";
                 case "accux.compare.exists":
                     return "compare.png";
+                case "accux.settings.open":
+                    return "settings.png";
                 default:
                     return "round.png";
             }

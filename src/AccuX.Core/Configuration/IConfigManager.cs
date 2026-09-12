@@ -11,6 +11,11 @@ namespace AccuX.Core.Configuration
         T GetSection<T>(string sectionName, T defaultValue = default) where T : class, new();
 
         /// <summary>
+        /// 将配置节写回磁盘。
+        /// </summary>
+        void SaveSection<T>(string sectionName, T value) where T : class, new();
+
+        /// <summary>
         /// 当前配置文件路径。
         /// </summary>
         string ConfigFilePath { get; }

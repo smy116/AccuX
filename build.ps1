@@ -2,11 +2,11 @@
 #
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File build.ps1
-#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
-    [string]$Version = '1.1',
+    [string]$Version = '1.4',
     [string]$OfficePiaPath = '',
     [switch]$SkipTests
 )

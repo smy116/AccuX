@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace AccuX.Core.Configuration
 {
@@ -28,7 +29,11 @@ namespace AccuX.Core.Configuration
             {
                 MissingMemberHandling = MissingMemberHandling.Ignore,
                 ObjectCreationHandling = ObjectCreationHandling.Replace,
-                NullValueHandling = NullValueHandling.Ignore
+                NullValueHandling = NullValueHandling.Ignore,
+                ContractResolver = new DefaultContractResolver
+                {
+                    NamingStrategy = new CamelCaseNamingStrategy()
+                }
             };
 
             Reload();
@@ -96,7 +101,13 @@ namespace AccuX.Core.Configuration
             lock (_gate)
             {
                 _root = _root ?? new JObject();
-                _root[sectionName] = value == null ? JValue.CreateNull() : JToken.FromObject(value);
+                var serializer = JsonSerializer.Create(_serializerSettings);
+                // 保存配置节时保留 null 字段，确保设置结构中的 lastUpdateCheckUtc
+                // 在尚未检测时也明确写出；读取仍沿用原有的忽略 null 行为。
+                serializer.NullValueHandling = NullValueHandling.Include;
+                _root[sectionName] = value == null
+                    ? JValue.CreateNull()
+                    : JToken.FromObject(value, serializer);
 
                 var directory = Path.GetDirectoryName(ConfigFilePath);
                 if (!string.IsNullOrEmpty(directory))

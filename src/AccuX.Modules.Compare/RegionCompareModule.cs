@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccuX.Core.Commands;
+using AccuX.Core.Configuration;
 using AccuX.Core.Modules;
 using AccuX.Core.Operations;
 
@@ -65,7 +66,8 @@ namespace AccuX.Modules.Compare
                 new RegionCompareService(),
                 config,
                 _context.Logger,
-                _context.Host?.MainWindowHandle);
+                _context.Host?.MainWindowHandle,
+                () => _context.Config.GetSection("settings", AccuXSettings.CreateDefault()));
             _window.Closed += (sender, args) =>
             {
                 try { _context.RegionCompareHost?.ReleaseSession(); } catch { }

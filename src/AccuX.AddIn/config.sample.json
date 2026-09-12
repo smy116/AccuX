@@ -1,12 +1,14 @@
 {
-  "basicFinance": {
-    "roundDigits": 2,
-    "largeSelectionWarning": 100000,
-    "maxProcessCells": 500000
-  },
-  "compare": {
+  "settings": {
     "largeSelectionWarning": 100000,
     "maxProcessCells": 500000,
+    "autoCheckForUpdates": true,
+    "lastUpdateCheckUtc": null
+  },
+  "basicFinance": {
+    "roundDigits": 2
+  },
+  "compare": {
     "firstOnlyColor": "#FFFF66",
     "secondOnlyColor": "#FFFF66",
     "sameColor": "#CCFFCC"

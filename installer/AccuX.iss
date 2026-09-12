@@ -1,7 +1,7 @@
 ; AccuX V1 安装脚本（规格 §26 安装与部署约定）
 ;
 ; 编译：ISCC.exe installer\AccuX.iss
-; 产物：installer\Output\AccuXSetup-1.1.exe
+; 产物：installer\Output\AccuXSetup-1.4.exe
 ;
 ; 要求：
 ;   - 检查 .NET Framework 4.8 前置条件；缺失时自动下载并安装；
@@ -18,10 +18,10 @@
 ;     因此注册表项需要同时写入 32 位与 64 位视图。
 
 #ifndef AccuXVersion
-#define AccuXVersion "1.1"
+#define AccuXVersion "1.4"
 #endif
 #ifndef AccuXFileVersion
-#define AccuXFileVersion "1.1.0.0"
+#define AccuXFileVersion "1.4.0.0"
 #endif
 #ifndef AccuXOutputBaseFilename
 #define AccuXOutputBaseFilename "AccuXSetup-" + AccuXVersion

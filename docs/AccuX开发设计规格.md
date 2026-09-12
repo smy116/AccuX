@@ -1541,7 +1541,7 @@ CellCount > maxProcessCells
     → V1 直接拒绝处理
 ```
 
-阈值由配置提供，最终默认值必须通过 Excel/WPS 实测 benchmark 决定，不在架构规格中硬编码具体性能结论。
+阈值由统一设置节提供。默认值为警告 100000、最大 500000；正式发布前仍应通过 Excel/WPS 实测 benchmark 验证性能和兼容性。
 
 在 `maxProcessCells` 以内，V1 原则上执行：
 
@@ -1734,7 +1734,7 @@ Selection 只用于创建一次 `RangeTarget`。
 
 超过 `largeSelectionWarning` 但未超过 `maxProcessCells` 时进行确认；超过 `maxProcessCells` 时 V1 直接拒绝处理。
 
-阈值放入配置。
+阈值统一放入 `settings` 配置节，由 AddIn 设置窗口编辑；保存后更新共享 `HostOptions` 和基础功能提示，区域对比在下一次操作时读取最新值。
 
 ---
 
@@ -1755,6 +1755,8 @@ WPF 主要用于：
 
 窗口必须正确设置 Excel/WPS 主窗口为 Owner。
 
+设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；仅当发现带有精确安装包与 SHA-256 附件的稳定 GitHub Release 时提示用户进入设置，下载校验通过后启动普通 Inno Setup 安装程序。
+
 ---
 
 # 21. 配置
@@ -1773,15 +1775,24 @@ JSON
 
 ```json
 {
-  "basicFinance": {
-    "roundDigits": 2,
+  "settings": {
     "largeSelectionWarning": 100000,
-    "maxProcessCells": 500000
+    "maxProcessCells": 500000,
+    "autoCheckForUpdates": true,
+    "lastUpdateCheckUtc": null
+  },
+  "basicFinance": {
+    "roundDigits": 2
+  },
+  "compare": {
+    "firstOnlyColor": "#FFFF66",
+    "secondOnlyColor": "#FFFF66",
+    "sameColor": "#CCFFCC"
   }
 }
 ```
 
-以上单元格阈值仅为配置结构示例；正式默认值必须根据 Excel/WPS 的兼容性和性能实测确定。
+`settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 GitHub Releases 检查，`lastUpdateCheckUtc` 由插件维护。
 
 V1 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
 

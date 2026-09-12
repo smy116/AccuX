@@ -382,7 +382,26 @@ New-AccuXIcon -Path (Join-Path $OutputDirectory 'compare.png') -DrawSymbol {
     $rightChevron.Dispose()
 }
 
-# 8-11. Mark actions: the four approved color variants of a highlighter.
+# 8. Settings: a blue gear over a white document surface.
+New-AccuXIcon -Path (Join-Path $OutputDirectory 'settings.png') -DrawSymbol {
+    param($g, $p)
+    $document = New-DocumentPath 4 4 24 24 5
+    Fill-OutlinedPath $g $p.EdgePen $p.WhiteBrush $document
+    $document.Dispose()
+
+    $gear = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $gear.AddEllipse(10, 10, 12, 12)
+    $g.FillPath($p.BlueBrush, $gear)
+    $g.DrawPath($p.EdgePen, $gear)
+    $gear.Dispose()
+    Fill-OutlinedEllipse $g $p.EdgeBrush $p.WhiteBrush 13.5 13.5 5 5
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 16 6 16 10
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 16 22 16 26
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 6 16 10 16
+    Draw-OutlinedLine $g $p.LineEdgePen $p.BluePen 22 16 26 16
+}
+
+# 9-12. Mark actions: the four approved color variants of a highlighter.
 New-AccuXIcon -Path (Join-Path $OutputDirectory 'mark-green.png') -DrawSymbol {
     param($g, $p)
     Draw-Highlighter $g $p $p.GreenBrush $p.GreenPen

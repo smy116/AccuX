@@ -98,6 +98,15 @@
                   screentip="区域对比"
                   supertip="比较两个区域中出现过的单元格值，并按区域独有与相同项分类。" />
         </group>
+        <group id="AccuXSettingsGroup" label="设置">
+          <button id="accux.settings.open"
+                  label="设置"
+                  size="large"
+                  onAction="OnAction"
+                  getImage="GetImage"
+                  screentip="设置"
+                  supertip="查看 AccuX 版本、处理限制和升级设置。" />
+        </group>
       </tab>
     </tabs>
   </ribbon>

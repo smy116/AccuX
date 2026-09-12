@@ -35,12 +35,12 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '1.1'
+          $version = '1.4'
           $isRelease = 'false'
 
           if ($env:REF_TYPE -eq 'tag') {
             if ($env:REF_NAME -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-              throw "非法版本 tag '$($env:REF_NAME)'。正式版本必须是 v主版本.次版本，例如 v1.1。"
+              throw "非法版本 tag '$($env:REF_NAME)'。正式版本必须是 v主版本.次版本，例如 v1.4。"
             }
 
             $major = [int64]$Matches[1]

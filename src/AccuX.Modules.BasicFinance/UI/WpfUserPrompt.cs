@@ -17,7 +17,7 @@ namespace AccuX.Modules.BasicFinance.UI
     public sealed class WpfUserPrompt : IUserPrompt, ICommentPromptSession
     {
         private readonly IHostContext _host;
-        private readonly long _largeSelectionWarning;
+        private long _largeSelectionWarning;
         private readonly int _defaultRoundDigits;
 
         public WpfUserPrompt(IHostContext host, long largeSelectionWarning, int defaultRoundDigits = 2)
@@ -27,6 +27,14 @@ namespace AccuX.Modules.BasicFinance.UI
             _defaultRoundDigits = defaultRoundDigits >= 0 && defaultRoundDigits <= RoundingOptions.MaxDigits
                 ? defaultRoundDigits
                 : 2;
+        }
+
+        public void UpdateLargeSelectionWarning(long largeSelectionWarning)
+        {
+            if (largeSelectionWarning > 0)
+            {
+                _largeSelectionWarning = largeSelectionWarning;
+            }
         }
 
         private IntPtr OwnerHandle

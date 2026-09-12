@@ -13,15 +13,31 @@ namespace AccuX.Host.Features
     public sealed class ExcelRegionCompareHost : ExcelHostBase, IRegionCompareHost
     {
         private readonly ExcelRangeOperationHost _rangeHost;
-        private readonly long _maxProcessCells;
+        private readonly HostOptions _options;
         private readonly Dictionary<string, Excel.Workbook> _workbookSessions = new Dictionary<string, Excel.Workbook>(StringComparer.Ordinal);
 
-        public ExcelRegionCompareHost(Excel.Application application, long maxProcessCells = 500000)
+        public ExcelRegionCompareHost(Excel.Application application, HostOptions options)
             : base(application)
         {
-            _maxProcessCells = maxProcessCells > 0 ? maxProcessCells : 500000;
-            _rangeHost = new ExcelRangeOperationHost(application, new HostOptions { MaxProcessCells = _maxProcessCells }, ResolveSessionWorkbook);
+            _options = options ?? new HostOptions();
+            if (_options.MaxProcessCells <= 0)
+            {
+                _options.MaxProcessCells = 500000;
+            }
+            if (_options.LargeSelectionWarning <= 0)
+            {
+                _options.LargeSelectionWarning = 100000;
+            }
+
+            _rangeHost = new ExcelRangeOperationHost(application, _options, ResolveSessionWorkbook);
         }
+
+        public ExcelRegionCompareHost(Excel.Application application, long maxProcessCells = 500000)
+            : this(application, new HostOptions { MaxProcessCells = maxProcessCells })
+        {
+        }
+
+        public HostOptions Options { get { return _options; } }
 
         protected override Excel.Workbook ResolveWorkbook(RangeTarget target)
         {
@@ -44,9 +60,9 @@ namespace AccuX.Host.Features
             var cells = (long)rows * columns;
             if (areas > 1) throw new HostOperationException("区域对比不支持多区域选区，请选择单个连续区域。");
             if (rows <= 0 || columns <= 0) throw new HostOperationException("当前选区为空。");
-            if (cells > _maxProcessCells)
+            if (cells > _options.MaxProcessCells)
             {
-                throw new HostOperationException("当前选区包含 " + cells + " 个单元格，超过区域对比上限 " + _maxProcessCells + "。");
+                throw new HostOperationException("当前选区包含 " + cells + " 个单元格，超过区域对比上限 " + _options.MaxProcessCells + "。");
             }
             if (HasMergedCells(selection))
             {

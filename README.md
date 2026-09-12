@@ -11,6 +11,7 @@ V1 现包含四个财务功能、一个工作簿目录功能、一个标记模�
 5. **生成目录** — 在工作簿最前面生成可见工作表目录，并为名称创建内部超链接；若已存在“目录”工作表，先确认是否删除并重新生成。
 6. **标记** — 将当前选区中的可见单元格底色标记为绿 / 红 / 黄 / 蓝。
 7. **区域对比** — 选择两个区域执行严格的单元格存在对比，查看区域独有项与相同项，并支持标记、清除和导出。
+8. **设置** — 统一管理版本信息、单元格处理阈值和 GitHub Releases 升级检测。
 
 核心目标不是功能数量，而是建立稳定、可扩展的基础架构：Excel/WPS 宿主差异层、明确的 Core/Host 单向依赖、统一 Range 操作管线、正确的数值/公式区分、模块内聚的业务算法。
 
@@ -63,15 +64,15 @@ AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
 # 一条命令完成还原、构建、测试、边界校验
 powershell -ExecutionPolicy Bypass -File build.ps1
 
-# Release 构建（默认版本为 1.1）
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
+# Release 构建（默认版本为 1.4）
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
 
 # 或手动
 dotnet build AccuX.sln -c Debug
 dotnet test AccuX.sln -c Debug
 ```
 
-当前状态：解决方案编译 0 警告 0 错误；单元测试 **187 项全部通过**（Core 63 项，BasicFinance 112 项，Mark 6 项，Compare 6 项）。
+当前状态：解决方案编译 0 警告 0 错误；单元测试 **214 项全部通过**（Core 78 项，BasicFinance 112 项，Mark 6 项，Compare 6 项，AddIn 12 项）。
 
 构建脚本会优先使用 Visual Studio Office15 PIA，也支持通过 `-OfficePiaPath` 显式指定目录；找不到该目录时兼容使用 GAC 中的 15.0.0.0 PIA。构建结束会校验 `Microsoft.Office.Interop.Excel.dll`、`office.dll` 和 `Microsoft.Vbe.Interop.dll` 均已复制到 Release 输出目录。
 
@@ -95,7 +96,7 @@ HKCU\Software\Kingsoft\Office\ET\AddinsWL
   "AccuX.AddIn.Connect"=""
 ```
 
-已验证：注册后 `Type.GetTypeFromProgID('AccuX.AddIn.Connect')` 可解析并实例化，`GetCustomUI` 返回正确 Ribbon XML，五个图标均可转换为 `IPictureDisp`。
+已验证：注册后 `Type.GetTypeFromProgID('AccuX.AddIn.Connect')` 可解析并实例化，`GetCustomUI` 返回正确 Ribbon XML，Ribbon 图标均可转换为 `IPictureDisp`。
 
 > `RegAsm` 会对未签名的程序集给出 `/codebase` 警告（RA0000）。开发期可忽略；正式发布建议为程序集添加强名称（强名称对 COM 注册与加载更稳妥）。
 
@@ -150,10 +151,19 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 ```json
 {
-  "basicFinance": {
-    "roundDigits": 2,
+  "settings": {
     "largeSelectionWarning": 100000,
-    "maxProcessCells": 500000
+    "maxProcessCells": 500000,
+    "autoCheckForUpdates": true,
+    "lastUpdateCheckUtc": null
+  },
+  "basicFinance": {
+    "roundDigits": 2
+  },
+  "compare": {
+    "firstOnlyColor": "#FFFF66",
+    "secondOnlyColor": "#FFFF66",
+    "sameColor": "#CCFFCC"
   }
 }
 ```
@@ -163,12 +173,18 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 | `roundDigits` | 一键舍入窗口的预填小数位（默认 2，窗口内仍可修改） |
 | `largeSelectionWarning` | 选区超过该单元格数时弹出确认提示 |
 | `maxProcessCells` | 选区超过该单元格数时直接拒绝处理 |
+| `autoCheckForUpdates` | 插件启动后是否自动检查 GitHub Releases（默认开启，每 24 小时最多一次） |
+| `lastUpdateCheckUtc` | 最近一次自动或手动检测时间，由插件维护 |
 
-区域对比使用独立的 `compare` 配置节，默认阈值为两区域合计超过 100000 个单元格提示确认、超过 500000 个单元格拒绝；`firstOnlyColor`、`secondOnlyColor` 和 `sameColor` 控制三类结果的标记底色。
+`settings` 是统一设置节。警告阈值和最大阈值同时作用于基础财务功能与区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 中的阈值会在首次加载时迁移到 `settings`，旧字段保留以便回滚到旧版本；`compare` 中的颜色仍保留在原配置节。
 
 样例文件位于 `src/AccuX.AddIn/config.sample.json`。
 
-> 阈值默认值需通过 Excel/WPS 实测 benchmark 最终确定，当前为配置结构示例。
+## 升级检查
+
+设置窗口可显示当前版本、手动检查 GitHub Releases，并在校验安装包 SHA-256 后启动普通 Inno Setup 安装程序。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、API 错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本 tag（例如 `v1.4`）。
+
+升级检查依赖仓库公开可读：`https://api.github.com/repos/smy116/AccuX/releases/latest`。
 
 ## 日志
 
@@ -209,12 +225,12 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 使用 Inno Setup 6.7.3 编译 `installer/AccuX.iss`。先构建 Release 程序集，再执行安装器回归检查：
 
 ```
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.1
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
 pwsh -NoProfile -File installer\Test-Installer.ps1
-ISCC.exe /DAccuXVersion=1.1 /DAccuXFileVersion=1.1.0.0 installer\AccuX.iss
+ISCC.exe /DAccuXVersion=1.4 /DAccuXFileVersion=1.4.0.0 installer\AccuX.iss
 ```
 
-脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.1.exe`，版本参数由 CI 传入时无需修改安装脚本。
+脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.4.exe`，版本参数由 CI 传入时无需修改安装脚本。
 
 ## GitHub Actions 自动构建与发布
 
@@ -223,11 +239,11 @@ ISCC.exe /DAccuXVersion=1.1 /DAccuXFileVersion=1.1.0.0 installer\AccuX.iss
 只有两段版本 tag 才会创建正式 Release：
 
 ```powershell
-git tag v1.1
-git push origin v1.1
+git tag v1.4
+git push origin v1.4
 ```
 
-`v1.1` 会生成 `AccuXSetup-1.1.exe`、对应的 SHA-256 文件，并发布名为 `AccuX v1.1` 的 Release。`v1.1.0`、`v01.1` 和 `v1.1-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+`v1.4` 会生成 `AccuXSetup-1.4.exe`、对应的 SHA-256 文件，并发布名为 `AccuX v1.4` 的 Release。`v1.4.0`、`v01.4` 和 `v1.4-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
 
 ## 人工验证清单
 
@@ -240,11 +256,13 @@ git push origin v1.1
 5. 选中混合区域（数值 + 文本 + 日期 + 布尔 + 空白 + 错误），确认只处理金额且结果统计正确。
 6. 选中区域后先点击按钮，在参数窗口打开期间切换工作表，确认仍只写回原 Target。
 7. 在选区内隐藏行或列，确认修改型功能和标记功能均不写入隐藏单元格，选区求和不计入隐藏数字。
-8. 选区超过 `maxProcessCells` 时确认被拒绝；超过 `largeSelectionWarning` 时确认弹出确认框。
-9. 选区求和后确认出现三行复制对话框；金额和万元金额为千分位、固定 2 位小数，大写金额可正常复制且窗口在点击按钮后关闭。
-10. 在装有 WPS 的机器上重复以上关键链路，回填 WPS 行。
-11. 在包含可见、隐藏和非常隐藏工作表的工作簿中执行“生成目录”，确认仅列出可见工作表、目录位于首位且名称可跳转；对同一工作簿再次执行“生成目录”，确认弹出替换确认框——选择“是”时旧“目录”表被删除并生成不含自身的新目录，选择“否”时不改动工作簿。
-12. 点击“存在对比”，分别捕获两个工作簿或工作表的连续区域，确认区域1独有、区域2独有、相同项、标题排除、隐藏数据跳过、重复次数、底色标记、清除标记和四张导出表均符合预期。
+8. 打开“设置”，确认版本号、统一阈值和自动升级选项；修改并保存后，基础财务功能与区域对比均使用新阈值，取消则不生效。
+9. 选区超过 `maxProcessCells` 时确认被拒绝；超过 `largeSelectionWarning` 时确认弹出确认框。
+10. 手动检查升级，确认“已是最新”或新版本信息；新版本安装前确认 SHA-256 校验、保存提示和普通安装启动行为。
+11. 选区求和后确认出现三行复制对话框；金额和万元金额为千分位、固定 2 位小数，大写金额可正常复制且窗口在点击按钮后关闭。
+12. 在包含可见、隐藏和非常隐藏工作表的工作簿中执行“生成目录”，确认仅列出可见工作表、目录位于首位且名称可跳转；对同一工作簿再次执行“生成目录”，确认弹出替换确认框——选择“是”时旧“目录”表被删除并生成不含自身的新目录，选择“否”时不改动工作簿。
+13. 点击“存在对比”，分别捕获两个工作簿或工作表的连续区域，确认区域1独有、区域2独有、相同项、标题排除、隐藏数据跳过、重复次数、底色标记、清除标记和四张导出表均符合预期。
+14. 在装有 WPS 的机器上重复以上关键链路，回填 WPS 行。
 
 ## 已知限制（V1）
 

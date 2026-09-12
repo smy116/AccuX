@@ -9,10 +9,9 @@ namespace AccuX.Modules.BasicFinance
         /// <summary>一键舍入默认小数位（窗口打开时的预填值）。</summary>
         public int RoundDigits { get; set; } = 2;
 
-        /// <summary>超过该单元格数时提示用户确认。</summary>
+        // 保留旧版字段，使旧配置模型和回滚到旧版本的代码仍可读取；新代码统一从 settings 读取。
         public long LargeSelectionWarning { get; set; } = 100000;
 
-        /// <summary>超过该单元格数时直接拒绝处理。</summary>
         public long MaxProcessCells { get; set; } = 500000;
     }
 }

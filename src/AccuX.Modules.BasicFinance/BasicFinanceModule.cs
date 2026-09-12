@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccuX.Core.Commands;
+using AccuX.Core.Configuration;
 using AccuX.Core.Modules;
 using AccuX.Core.Operations;
 using AccuX.Modules.BasicFinance.AmountConversion;
@@ -48,7 +49,8 @@ namespace AccuX.Modules.BasicFinance
             _context = context ?? throw new ArgumentNullException(nameof(context));
 
             var config = context.Config.GetSection("basicFinance", new BasicFinanceConfig());
-            var defaultPrompt = new WpfUserPrompt(context.Host, config.LargeSelectionWarning, config.RoundDigits);
+            var settings = context.Config.GetSection("settings", AccuXSettings.CreateDefault());
+            var defaultPrompt = new WpfUserPrompt(context.Host, settings.LargeSelectionWarning, config.RoundDigits);
             _prompt = PromptOverride ?? defaultPrompt;
             _commentPrompt = CommentPromptOverride
                 ?? PromptOverride as ICommentPrompt
