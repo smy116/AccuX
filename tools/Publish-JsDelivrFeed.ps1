@@ -30,6 +30,7 @@ if ($Branch -notmatch '^[A-Za-z0-9._/-]+$') {
 }
 
 $installerName = "AccuXSetup-$Version.exe"
+$cdnInstallerName = "AccuXSetup-$Version.bin"
 $installerPath = Join-Path $ArtifactDirectory $installerName
 $checksumPath = "$installerPath.sha256"
 if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
@@ -88,7 +89,8 @@ try {
 
         $releaseDirectory = Join-Path $tempRoot "releases\$Version"
         New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
-        Copy-Item -LiteralPath $installerPath -Destination (Join-Path $releaseDirectory $installerName) -Force
+        # jsDelivr 会对 .exe 返回 HTTP 403；镜像中使用 .bin，客户端落盘时恢复为 .exe。
+        Copy-Item -LiteralPath $installerPath -Destination (Join-Path $releaseDirectory $cdnInstallerName) -Force
         Copy-Item -LiteralPath $checksumPath -Destination (Join-Path $releaseDirectory "$installerName.sha256") -Force
 
         $releaseJson = & gh release view $TagName --repo $Repository --json name,body 2>&1
@@ -107,7 +109,7 @@ try {
             name = $releaseName
             notes = $releaseBody
             releaseNotesUrl = "$cdnRoot/RELEASE-NOTES.md"
-            installerUrl = "$cdnRoot/$installerName"
+            installerUrl = "$cdnRoot/$cdnInstallerName"
             sha256Url = "$cdnRoot/$installerName.sha256"
             publishedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
             draft = $false

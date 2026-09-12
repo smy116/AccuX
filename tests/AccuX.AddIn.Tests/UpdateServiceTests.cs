@@ -101,7 +101,7 @@ namespace AccuX.AddIn.Tests
         public async Task DownloadAndVerify_RequiresMatchingJsDelivrChecksum()
         {
             var installerName = "AccuXSetup-1.4.exe";
-            var installerUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName);
+            var installerUrl = JsDelivrReleaseService.GetCdnInstallerUrl("1.4");
             var checksumUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName + ".sha256");
             var installerBytes = Encoding.UTF8.GetBytes("test installer");
             var hash = ComputeSha256(installerBytes);
@@ -124,6 +124,103 @@ namespace AccuX.AddIn.Tests
             Assert.True(System.IO.File.Exists(result.InstallerPath));
             System.IO.File.Delete(result.InstallerPath);
             System.IO.Directory.Delete(System.IO.Path.GetDirectoryName(result.InstallerPath));
+        }
+
+        [Fact]
+        public async Task DownloadAndVerify_AcceptsGitHubReleaseAssetUrls()
+        {
+            var installerName = "AccuXSetup-1.4.exe";
+            var installerUrl = JsDelivrReleaseService.GetGitHubAssetUrl("v1.4", installerName);
+            var checksumUrl = JsDelivrReleaseService.GetGitHubAssetUrl("v1.4", installerName + ".sha256");
+            var installerBytes = Encoding.UTF8.GetBytes("github release installer");
+            var hash = ComputeSha256(installerBytes);
+            var responses = new Dictionary<string, HttpResponseMessage>(StringComparer.Ordinal)
+            {
+                [JsDelivrReleaseService.UpdateFeedUrl] = JsonResponse(FeedJson("1.4", installerUrl, checksumUrl)),
+                [checksumUrl] = TextResponse(hash + " *" + installerName),
+                [installerUrl] = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(installerBytes)
+                }
+            };
+            var client = CreateClient(request => responses[request.RequestUri.AbsoluteUri]);
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
+            var check = await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
+
+            try
+            {
+                Assert.True(result.Succeeded);
+                Assert.True(System.IO.File.Exists(result.InstallerPath));
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(result.InstallerPath) && System.IO.File.Exists(result.InstallerPath))
+                {
+                    System.IO.File.Delete(result.InstallerPath);
+                    System.IO.Directory.Delete(System.IO.Path.GetDirectoryName(result.InstallerPath));
+                }
+            }
+        }
+
+        [Fact]
+        public async Task DownloadAndVerify_FallsBackToGitHubWhenJsDelivrRejectsInstaller()
+        {
+            var installerName = "AccuXSetup-1.4.exe";
+            var installerUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName);
+            var checksumUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName + ".sha256");
+            var fallbackUrl = JsDelivrReleaseService.GetGitHubAssetUrl("v1.4", installerName);
+            var installerBytes = Encoding.UTF8.GetBytes("fallback installer");
+            var hash = ComputeSha256(installerBytes);
+            var requestedUrls = new List<string>();
+            var client = CreateClient(request =>
+            {
+                requestedUrls.Add(request.RequestUri.AbsoluteUri);
+                if (request.RequestUri.AbsoluteUri == JsDelivrReleaseService.UpdateFeedUrl)
+                {
+                    return JsonResponse(FeedJson("1.4", installerUrl, checksumUrl));
+                }
+
+                if (request.RequestUri.AbsoluteUri == checksumUrl)
+                {
+                    return TextResponse(hash + " *" + installerName);
+                }
+
+                if (request.RequestUri.AbsoluteUri == installerUrl)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.Forbidden);
+                }
+
+                if (request.RequestUri.AbsoluteUri == fallbackUrl)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent(installerBytes)
+                    };
+                }
+
+                throw new InvalidOperationException("unexpected URL: " + request.RequestUri.AbsoluteUri);
+            });
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
+            var check = await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
+
+            try
+            {
+                Assert.True(result.Succeeded);
+                Assert.Contains(installerUrl, requestedUrls);
+                Assert.Contains(fallbackUrl, requestedUrls);
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(result.InstallerPath) && System.IO.File.Exists(result.InstallerPath))
+                {
+                    System.IO.File.Delete(result.InstallerPath);
+                    System.IO.Directory.Delete(System.IO.Path.GetDirectoryName(result.InstallerPath));
+                }
+            }
         }
 
         [Fact]
@@ -164,7 +261,7 @@ namespace AccuX.AddIn.Tests
             var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
 
             Assert.False(result.Succeeded);
-            Assert.Contains("jsDelivr", result.Message);
+            Assert.Contains("有效", result.Message);
         }
 
         private static HttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> responder)
@@ -180,7 +277,7 @@ namespace AccuX.AddIn.Tests
         {
             var installerName = "AccuXSetup-" + version + ".exe";
             var assetRoot = "https://cdn.jsdelivr.net/gh/smy116/AccuX@update-feed/releases/" + version;
-            installerUrl = installerUrl ?? assetRoot + "/" + installerName;
+            installerUrl = installerUrl ?? assetRoot + "/AccuXSetup-" + version + ".bin";
             checksumUrl = checksumUrl ?? assetRoot + "/" + installerName + ".sha256";
             tag = tag ?? "v" + version;
             return "{\"version\":\"" + version + "\",\"tag\":\"" + tag + "\",\"name\":\"AccuX v" + version

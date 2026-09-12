@@ -17,8 +17,8 @@ namespace AccuX.AddIn.Updates
     /// <summary>
     /// 读取 jsDelivr 上的静态更新清单，并下载经过校验的安装包。
     ///
-    /// 运行时只访问 cdn.jsdelivr.net。GitHub Release 仍由发布流程维护，
-    /// 发布产物会同步到 jsDelivr 可读取的 update-feed 分支。
+    /// 更新清单、说明和安装包都由 jsDelivr 提供；安装包在镜像分支中使用 .bin 扩展名。
+    /// 下载到本地后仍恢复为 .exe，并在启动前完成 SHA-256 校验；旧 .exe 清单保留 GitHub 回退逻辑。
     /// </summary>
     internal sealed class JsDelivrReleaseService
     {
@@ -26,6 +26,8 @@ namespace AccuX.AddIn.Updates
         private const string FeedBranch = "update-feed";
         private const string LatestFeedPath = "latest.json";
         private const string CdnHost = "cdn.jsdelivr.net";
+        private const string GitHubHost = "github.com";
+        private const string CdnInstallerExtension = ".bin";
         private const string UserAgent = "AccuX-UpdateChecker";
         private const string LatestFeedUrl = "https://cdn.jsdelivr.net/gh/" + Repository + "@" + FeedBranch + "/" + LatestFeedPath;
 
@@ -164,11 +166,21 @@ namespace AccuX.AddIn.Updates
             try
             {
                 Directory.CreateDirectory(directory);
-                var checksumText = await DownloadTextAsync(checksum.DownloadUrl, cancellationToken)
+                var checksumText = await DownloadTextWithFallbackAsync(
+                        checksum,
+                        release,
+                        installerName + ".sha256",
+                        cancellationToken)
                     .ConfigureAwait(false);
                 var expectedHash = ParseChecksum(checksumText, installerName);
 
-                await DownloadFileAsync(installer.DownloadUrl, temporaryPath, progress, cancellationToken)
+                await DownloadInstallerWithFallbackAsync(
+                        installer,
+                        release,
+                        installerName,
+                        temporaryPath,
+                        progress,
+                        cancellationToken)
                     .ConfigureAwait(false);
 
                 var actualHash = ComputeSha256(temporaryPath);
@@ -207,16 +219,34 @@ namespace AccuX.AddIn.Updates
 
         internal static string GetAssetUrl(string version, string fileName)
         {
-            if (!ReleaseVersion.TryParse(version, out var releaseVersion)
-                || string.IsNullOrWhiteSpace(fileName)
-                || fileName.IndexOf('/') >= 0
-                || fileName.IndexOf('\\') >= 0)
+            if (!ReleaseVersion.TryParse(version, out var releaseVersion) || !IsSafeFileName(fileName))
             {
                 throw new ArgumentException("版本号或文件名无效。", nameof(version));
             }
 
             return "https://cdn.jsdelivr.net/gh/" + Repository + "@" + FeedBranch
                 + "/releases/" + releaseVersion.Text + "/" + fileName;
+        }
+
+        internal static string GetGitHubAssetUrl(string tagName, string fileName)
+        {
+            if (!ReleaseVersion.TryParse(tagName, out _) || !IsSafeFileName(fileName))
+            {
+                throw new ArgumentException("版本 tag 或文件名无效。", nameof(tagName));
+            }
+
+            return "https://github.com/" + Repository + "/releases/download/" + tagName.Trim() + "/" + fileName;
+        }
+
+        internal static string GetCdnInstallerUrl(string version)
+        {
+            if (!ReleaseVersion.TryParse(version, out var releaseVersion))
+            {
+                throw new ArgumentException("版本号无效。", nameof(version));
+            }
+
+            var installerName = "AccuXSetup-" + releaseVersion.Text + ".exe";
+            return GetAssetUrl(releaseVersion.Text, GetCdnInstallerFileName(installerName));
         }
 
         private static HttpClient CreateHttpClient(TimeSpan timeout)
@@ -267,6 +297,67 @@ namespace AccuX.AddIn.Updates
                 }
 
                 return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            }
+        }
+
+        private async Task<string> DownloadTextWithFallbackAsync(
+            UpdateAsset asset,
+            UpdateReleaseInfo release,
+            string expectedFileName,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await DownloadTextAsync(asset.DownloadUrl, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (!IsJsDelivrAssetUrl(asset.DownloadUrl, release.Version, expectedFileName))
+                {
+                    throw;
+                }
+
+                var fallbackUrl = GetGitHubAssetUrl(release.TagName, expectedFileName);
+                _logger.Warn("jsDelivr 校验文件下载失败，改用 GitHub Release：" + ex.Message);
+                return await DownloadTextAsync(fallbackUrl, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private async Task DownloadInstallerWithFallbackAsync(
+            UpdateAsset installer,
+            UpdateReleaseInfo release,
+            string installerName,
+            string path,
+            IProgress<double> progress,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await DownloadFileAsync(installer.DownloadUrl, path, progress, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (!IsJsDelivrInstallerUrl(installer.DownloadUrl, release.Version, installerName))
+                {
+                    throw;
+                }
+
+                // DownloadFileAsync 可能已经留下了未完成的 .part 文件，回退前必须先删除。
+                TryDelete(path);
+                progress?.Report(0);
+                var fallbackUrl = GetGitHubAssetUrl(release.TagName, installerName);
+                _logger.Warn("jsDelivr 安装包下载失败，改用 GitHub Release：" + ex.Message);
+                await DownloadFileAsync(fallbackUrl, path, progress, cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
 
@@ -367,18 +458,63 @@ namespace AccuX.AddIn.Updates
                 && string.Equals(uri.Host, CdnHost, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool IsJsDelivrUrl(string value, string expectedFileName)
+        private static bool IsJsDelivrAssetUrl(
+            string value,
+            ReleaseVersion version,
+            string expectedFileName)
         {
-            if (!IsJsDelivrUrl(value) || string.IsNullOrWhiteSpace(expectedFileName))
+            if (!IsJsDelivrUrl(value) || version == null || !IsSafeFileName(expectedFileName))
             {
                 return false;
             }
 
             var uri = new Uri(value, UriKind.Absolute);
-            var path = uri.AbsolutePath.TrimEnd('/');
-            var separator = path.LastIndexOf('/');
-            var fileName = separator >= 0 ? path.Substring(separator + 1) : path;
-            return string.Equals(fileName, expectedFileName, StringComparison.OrdinalIgnoreCase);
+            var expectedPath = "/gh/" + Repository + "@" + FeedBranch
+                + "/releases/" + version.Text + "/" + expectedFileName;
+            return string.Equals(uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(uri.Query)
+                && string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        private static bool IsJsDelivrInstallerUrl(
+            string value,
+            ReleaseVersion version,
+            string installerName)
+        {
+            return IsJsDelivrAssetUrl(value, version, GetCdnInstallerFileName(installerName))
+                // 兼容已经发布的旧清单：旧地址仍然以 .exe 结尾，但 jsDelivr 会返回 403，
+                // 下载失败时由 DownloadInstallerWithFallbackAsync 改用 GitHub Release。
+                || IsJsDelivrAssetUrl(value, version, installerName);
+        }
+
+        private static bool IsGitHubAssetUrl(
+            string value,
+            string tagName,
+            ReleaseVersion version,
+            string expectedFileName)
+        {
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(uri.Host, GitHubHost, StringComparison.OrdinalIgnoreCase)
+                || version == null
+                || !ReleaseVersion.TryParse(tagName, out var tagVersion)
+                || tagVersion.CompareTo(version) != 0
+                || !IsSafeFileName(expectedFileName))
+            {
+                return false;
+            }
+
+            var expectedPath = "/" + Repository + "/releases/download/" + tagName.Trim() + "/" + expectedFileName;
+            return string.Equals(uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(uri.Query)
+                && string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        private static bool IsSafeFileName(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && value.IndexOf('/') < 0
+                && value.IndexOf('\\') < 0;
         }
 
         private static bool TryGetRequiredAssets(
@@ -401,14 +537,27 @@ namespace AccuX.AddIn.Updates
             installer = release.FindAsset(installerName);
             checksum = release.FindAsset(checksumName);
             if (installer == null || checksum == null
-                || !IsJsDelivrUrl(installer.DownloadUrl, installerName)
-                || !IsJsDelivrUrl(checksum.DownloadUrl, checksumName))
+                || (!IsJsDelivrInstallerUrl(installer.DownloadUrl, release.Version, installerName)
+                    && !IsGitHubAssetUrl(installer.DownloadUrl, release.TagName, release.Version, installerName))
+                || (!IsJsDelivrAssetUrl(checksum.DownloadUrl, release.Version, checksumName)
+                    && !IsGitHubAssetUrl(checksum.DownloadUrl, release.TagName, release.Version, checksumName)))
             {
-                errorMessage = "jsDelivr 更新清单缺少预期的安装包或 SHA-256 校验文件。";
+                errorMessage = "更新清单缺少有效的安装包或 SHA-256 校验文件（仅支持 jsDelivr 或 GitHub Release 地址）。";
                 return false;
             }
 
             return true;
+        }
+
+        private static string GetCdnInstallerFileName(string installerName)
+        {
+            if (!IsSafeFileName(installerName)
+                || !installerName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("安装包文件名无效。", nameof(installerName));
+            }
+
+            return installerName.Substring(0, installerName.Length - ".exe".Length) + CdnInstallerExtension;
         }
 
         private static void TryDelete(string path)

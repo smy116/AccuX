@@ -184,9 +184,9 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 设置窗口可显示当前版本、手动检查 jsDelivr 更新清单，并在校验安装包 SHA-256 后启动普通 Inno Setup 安装程序。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、清单错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本号（例如 `1.4`）。
 
-插件运行时只访问 jsDelivr：`https://cdn.jsdelivr.net/gh/smy116/AccuX@update-feed/latest.json`。发布工作流会把 GitHub Release 中的安装包、SHA-256 文件和更新说明同步到 `update-feed` 分支，再由 jsDelivr 提供访问；jsDelivr 不可用时升级检测静默失败，不影响插件正常使用。
+插件运行时从 jsDelivr 读取更新清单、更新说明和安装包：`https://cdn.jsdelivr.net/gh/smy116/AccuX@update-feed/latest.json`。由于 jsDelivr 会对 `.exe` 安装包返回 HTTP 403，发布流程会在 `update-feed` 分支中将安装包保存为 `.bin`；客户端下载后仍按 `.exe` 保存，在 SHA-256 校验通过后才启动。旧清单中的 jsDelivr `.exe` 地址仍会自动回退到 GitHub Release。jsDelivr 不可用时升级检测静默失败，不影响插件正常使用。
 
-更新清单包含 `version`、`tag`、`name`、`notes`、`releaseNotesUrl`、`installerUrl` 和 `sha256Url`；其中安装包与校验文件固定存放在 `update-feed/releases/{version}/`，清单只引用 jsDelivr 地址。
+更新清单包含 `version`、`tag`、`name`、`notes`、`releaseNotesUrl`、`installerUrl` 和 `sha256Url`；更新说明固定存放在 `update-feed/releases/{version}/`，安装包使用 `AccuXSetup-{version}.bin` 存放，校验文件仍使用 `AccuXSetup-{version}.exe.sha256` 存放，清单中的两类地址均指向 jsDelivr。
 
 ## 日志
 

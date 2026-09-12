@@ -121,7 +121,7 @@ namespace AccuX.AddIn.Tests
         private static HttpResponseMessage LatestResponse(string version)
         {
             var installerName = "AccuXSetup-" + version + ".exe";
-            var installerUrl = JsDelivrReleaseService.GetAssetUrl(version, installerName);
+            var installerUrl = JsDelivrReleaseService.GetCdnInstallerUrl(version);
             var checksumUrl = JsDelivrReleaseService.GetAssetUrl(version, installerName + ".sha256");
             var json = "{\"version\":\"" + version + "\",\"tag\":\"v" + version + "\","
                 + "\"name\":\"AccuX\",\"notes\":\"\","
