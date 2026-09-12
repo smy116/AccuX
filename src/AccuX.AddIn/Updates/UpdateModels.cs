@@ -15,6 +15,8 @@ namespace AccuX.AddIn.Updates
 
         public string HtmlUrl { get; set; }
 
+        public string InstallerUrl { get; set; }
+
         public bool Draft { get; set; }
 
         public bool Prerelease { get; set; }
@@ -92,9 +94,9 @@ namespace AccuX.AddIn.Updates
         }
     }
 
-    internal sealed class UpdateInstallResult
+    internal sealed class UpdateOpenResult
     {
-        private UpdateInstallResult()
+        private UpdateOpenResult()
         {
         }
 
@@ -102,24 +104,21 @@ namespace AccuX.AddIn.Updates
 
         public string Message { get; private set; }
 
-        public string InstallerPath { get; private set; }
-
-        public static UpdateInstallResult Success(string installerPath)
+        public static UpdateOpenResult Success()
         {
-            return new UpdateInstallResult
+            return new UpdateOpenResult
             {
                 Succeeded = true,
-                InstallerPath = installerPath,
-                Message = "升级安装程序已启动。"
+                Message = "已在浏览器中打开升级安装包下载地址。"
             };
         }
 
-        public static UpdateInstallResult Failed(string message)
+        public static UpdateOpenResult Failed(string message)
         {
-            return new UpdateInstallResult
+            return new UpdateOpenResult
             {
                 Succeeded = false,
-                Message = message ?? "升级安装程序启动失败。"
+                Message = message ?? "无法打开升级安装包下载地址。"
             };
         }
     }

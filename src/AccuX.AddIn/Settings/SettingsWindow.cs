@@ -108,7 +108,7 @@ namespace AccuX.AddIn.Settings
                 return;
             }
 
-            SetBusy(true, false);
+            SetBusy(true);
             try
             {
                 var result = await _updateCoordinator.CheckManuallyAsync(_currentVersion);
@@ -125,37 +125,29 @@ namespace AccuX.AddIn.Settings
             }
             finally
             {
-                SetBusy(false, false);
+                SetBusy(false);
             }
         }
 
-        private async void OnInstall(object sender, RoutedEventArgs e)
+        private void OnOpenInstallerDownload(object sender, RoutedEventArgs e)
         {
             if (_busy || _lastCheckResult == null || !_lastCheckResult.HasUpdate)
             {
                 return;
             }
 
-            var confirm = MessageBox.Show(
-                this,
-                "升级安装程序需要替换 AccuX 文件。请先保存工作簿并关闭 Excel/WPS，再继续启动安装程序。是否继续？",
-                "AccuX 升级",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (confirm != MessageBoxResult.Yes)
-            {
-                return;
-            }
-
-            SetBusy(true, true);
             try
             {
-                var progress = new Progress<double>(value => _downloadProgress.Value = value);
-                var result = await _updateCoordinator.DownloadAndLaunchAsync(_lastCheckResult, progress);
+                var result = _updateCoordinator.OpenInstallerDownload(_lastCheckResult);
                 if (result.Succeeded)
                 {
-                    MessageBox.Show(this, result.Message + Environment.NewLine + "请关闭 Excel/WPS 后完成安装。", "AccuX", MessageBoxButton.OK, MessageBoxImage.Information);
-                    Close();
+                    _updateStatusText.Text = result.Message;
+                    MessageBox.Show(
+                        this,
+                        result.Message + Environment.NewLine + "下载完成后请保存工作并关闭 Excel/WPS，再手动运行安装程序。",
+                        "AccuX",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
                 }
                 else
                 {
@@ -163,18 +155,10 @@ namespace AccuX.AddIn.Settings
                     MessageBox.Show(this, result.Message, "AccuX", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                _updateStatusText.Text = "升级下载已取消。";
-            }
             catch (Exception ex)
             {
-                _updateStatusText.Text = "升级失败：" + ex.Message;
+                _updateStatusText.Text = "无法打开升级下载地址：" + ex.Message;
                 MessageBox.Show(this, _updateStatusText.Text, "AccuX", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            finally
-            {
-                SetBusy(false, false);
             }
         }
 
@@ -244,17 +228,12 @@ namespace AccuX.AddIn.Settings
             return true;
         }
 
-        private void SetBusy(bool busy, bool downloading)
+        private void SetBusy(bool busy)
         {
             _busy = busy;
             _manualCheckButton.IsEnabled = !busy;
             _installButton.IsEnabled = !busy && _lastCheckResult != null && _lastCheckResult.HasUpdate;
             _releasePageButton.IsEnabled = !busy && _lastCheckResult?.LatestRelease != null;
-            _downloadProgress.Visibility = downloading ? Visibility.Visible : Visibility.Collapsed;
-            if (!downloading)
-            {
-                _downloadProgress.Value = 0;
-            }
         }
 
         private void UpdateLastCheckText(DateTime? utc)

@@ -126,8 +126,8 @@ namespace AccuX.AddIn
             _uiDispatcher = WpfDispatcher.FromThread(Thread.CurrentThread) ?? WpfDispatcher.CurrentDispatcher;
             _updateCoordinator = new UpdateCoordinator(
                 _settingsStore,
-                new JsDelivrReleaseService(Logger),
-                new InstallerLauncher(),
+                new GitHubReleaseService(Logger),
+                new BrowserLauncher(),
                 Logger,
                 _uiDispatcher);
             _started = true;

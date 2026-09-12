@@ -8,15 +8,15 @@ using AccuX.Core.Logging;
 namespace AccuX.AddIn.Updates
 {
     /// <summary>
-    /// 统一管理自动/手动检测、节流、下载和安装程序启动。
+    /// 统一管理自动/手动检测、节流和浏览器下载入口。
     /// </summary>
     internal sealed class UpdateCoordinator : IDisposable
     {
         private static readonly TimeSpan AutomaticCheckInterval = TimeSpan.FromHours(24);
 
         private readonly AccuXSettingsStore _settingsStore;
-        private readonly JsDelivrReleaseService _releaseService;
-        private readonly IInstallerLauncher _installerLauncher;
+        private readonly GitHubReleaseService _releaseService;
+        private readonly IBrowserLauncher _browserLauncher;
         private readonly ILogger _logger;
         private readonly Dispatcher _uiDispatcher;
         private readonly Func<DateTime> _utcNow;
@@ -26,15 +26,15 @@ namespace AccuX.AddIn.Updates
 
         public UpdateCoordinator(
             AccuXSettingsStore settingsStore,
-            JsDelivrReleaseService releaseService,
-            IInstallerLauncher installerLauncher,
+            GitHubReleaseService releaseService,
+            IBrowserLauncher browserLauncher,
             ILogger logger,
             Dispatcher uiDispatcher,
             Func<DateTime> utcNow = null)
         {
             _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
             _releaseService = releaseService ?? throw new ArgumentNullException(nameof(releaseService));
-            _installerLauncher = installerLauncher ?? throw new ArgumentNullException(nameof(installerLauncher));
+            _browserLauncher = browserLauncher ?? throw new ArgumentNullException(nameof(browserLauncher));
             _logger = logger ?? NullLogger.Instance;
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
             _utcNow = utcNow ?? (() => DateTime.UtcNow);
@@ -60,35 +60,30 @@ namespace AccuX.AddIn.Updates
             return CheckAndRecordAsync(currentVersion, _cancellation.Token);
         }
 
-        public async Task<UpdateInstallResult> DownloadAndLaunchAsync(
-            UpdateCheckResult checkResult,
-            IProgress<double> progress)
+        public UpdateOpenResult OpenInstallerDownload(UpdateCheckResult checkResult)
         {
             if (_disposed)
             {
-                return UpdateInstallResult.Failed("AccuX 正在关闭，无法启动升级。");
+                return UpdateOpenResult.Failed("AccuX 正在关闭，无法打开升级下载地址。");
             }
 
             if (checkResult == null || !checkResult.IsSuccessful || !checkResult.HasUpdate || checkResult.LatestRelease == null)
             {
-                return UpdateInstallResult.Failed("没有可用的升级版本。");
+                return UpdateOpenResult.Failed("没有可用的升级版本。");
             }
 
-            var download = await _releaseService.DownloadAndVerifyAsync(
-                checkResult.LatestRelease,
-                progress,
-                _cancellation.Token).ConfigureAwait(false);
-            if (!download.Succeeded)
+            if (!_releaseService.HasInstaller(checkResult.LatestRelease, out var assetError))
             {
-                return download;
+                return UpdateOpenResult.Failed(assetError);
             }
 
-            if (!_installerLauncher.TryLaunch(download.InstallerPath, out var errorMessage))
+            var url = checkResult.LatestRelease.InstallerUrl;
+            if (!_browserLauncher.TryOpen(url, out var errorMessage))
             {
-                return UpdateInstallResult.Failed(errorMessage);
+                return UpdateOpenResult.Failed(errorMessage);
             }
 
-            return download;
+            return UpdateOpenResult.Success();
         }
 
         public void Dispose()
@@ -141,12 +136,6 @@ namespace AccuX.AddIn.Updates
 
                 if (!result.HasUpdate || onUpdateAvailable == null)
                 {
-                    return;
-                }
-
-                if (!_releaseService.HasRequiredAssets(result.LatestRelease, out var assetError))
-                {
-                    _logger.Warn("自动升级检测发现新版本但附件不完整：" + assetError);
                     return;
                 }
 

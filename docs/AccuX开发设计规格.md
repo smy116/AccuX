@@ -1759,7 +1759,7 @@ WPF 主要用于：
 
 窗口必须正确设置 Excel/WPS 主窗口为 Owner。
 
-设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；运行时从 jsDelivr 读取静态更新清单、更新说明和安装包。由于 jsDelivr 会拒绝 `.exe` 路径，发布镜像中的安装包使用 `.bin` 扩展名，客户端下载后恢复为 `.exe`，并在启动前完成 SHA-256 校验；清单必须指向精确的两段式稳定版本。对旧清单中的 jsDelivr `.exe` 安装包地址保留 GitHub Release 回退；发现新版本且下载校验通过后，提示用户进入设置并启动普通 Inno Setup 安装程序；更新服务不可用时只记录日志，不影响插件运行。
+设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；运行时从 GitHub Releases API 获取最新稳定 Release、更新说明和安装包下载地址。API 响应必须包含精确的两段式稳定版本 tag 及对应的 `AccuXSetup-{version}.exe` GitHub asset；客户端只在浏览器中打开 `browser_download_url`，不下载、校验或启动安装程序。发现新版本后提示用户进入设置并手动下载安装；更新服务不可用时只记录日志，不影响插件运行。
 
 ---
 
@@ -1796,7 +1796,7 @@ JSON
 }
 ```
 
-`settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 jsDelivr 更新清单检查，`lastUpdateCheckUtc` 由插件维护。
+`settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 GitHub Release 检查，`lastUpdateCheckUtc` 由插件维护。
 
 V1 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
 

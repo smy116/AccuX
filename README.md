@@ -11,7 +11,7 @@ V1 现包含四个财务功能、一个工作簿目录功能、一个标记模�
 5. **生成目录** — 在工作簿最前面生成可见工作表目录，并为名称创建内部超链接；若已存在“目录”工作表，先确认是否删除并重新生成。
 6. **标记** — 将当前选区中的可见单元格底色标记为绿 / 红 / 黄 / 蓝。
 7. **区域对比** — 选择两个区域执行严格的单元格存在对比，查看区域独有项与相同项，并支持标记、清除和导出。
-8. **设置** — 统一管理版本信息、单元格处理阈值和 jsDelivr 升级检测。
+8. **设置** — 统一管理版本信息、单元格处理阈值和 GitHub Release 升级检测。
 
 核心目标不是功能数量，而是建立稳定、可扩展的基础架构：Excel/WPS 宿主差异层、明确的 Core/Host 单向依赖、统一 Range 操作管线、正确的数值/公式区分、模块内聚的业务算法。
 
@@ -173,7 +173,7 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 | `roundDigits` | 一键舍入窗口的预填小数位（默认 2，窗口内仍可修改） |
 | `largeSelectionWarning` | 选区超过该单元格数时弹出确认提示 |
 | `maxProcessCells` | 选区超过该单元格数时直接拒绝处理 |
-| `autoCheckForUpdates` | 插件启动后是否自动检查 jsDelivr 更新清单（默认开启，每 24 小时最多一次） |
+| `autoCheckForUpdates` | 插件启动后是否自动检查 GitHub Release（默认开启，每 24 小时最多一次） |
 | `lastUpdateCheckUtc` | 最近一次自动或手动检测时间，由插件维护 |
 
 `settings` 是统一设置节。警告阈值和最大阈值同时作用于基础财务功能与区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 中的阈值会在首次加载时迁移到 `settings`，旧字段保留以便回滚到旧版本；`compare` 中的颜色仍保留在原配置节。
@@ -182,11 +182,11 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 ## 升级检查
 
-设置窗口可显示当前版本、手动检查 jsDelivr 更新清单，并在校验安装包 SHA-256 后启动普通 Inno Setup 安装程序。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、清单错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本号（例如 `1.4`）。
+设置窗口可显示当前版本并手动检查 GitHub Release。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、API 响应错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，点击“下载升级包”会在浏览器中打开 GitHub 安装包地址，用户下载后手动运行普通 Inno Setup 安装程序；安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本号（例如 `1.4`）。
 
-插件运行时从 jsDelivr 读取更新清单、更新说明和安装包：`https://cdn.jsdelivr.net/gh/smy116/AccuX@update-feed/latest.json`。由于 jsDelivr 会对 `.exe` 安装包返回 HTTP 403，发布流程会在 `update-feed` 分支中将安装包保存为 `.bin`；客户端下载后仍按 `.exe` 保存，在 SHA-256 校验通过后才启动。旧清单中的 jsDelivr `.exe` 地址仍会自动回退到 GitHub Release。jsDelivr 不可用时升级检测静默失败，不影响插件正常使用。
+插件运行时从 GitHub Releases API 读取最新稳定版本：`https://api.github.com/repos/smy116/AccuX/releases/latest`。API 返回 Release 元数据及 `AccuXSetup-{version}.exe` 的 `browser_download_url`；客户端只打开该 HTTPS 地址，不在本地下载、校验或启动安装程序。GitHub API 不可用、响应无效或 Release 缺少安装包时，升级检测静默失败，不影响插件正常使用。
 
-更新清单包含 `version`、`tag`、`name`、`notes`、`releaseNotesUrl`、`installerUrl` 和 `sha256Url`；更新说明固定存放在 `update-feed/releases/{version}/`，安装包使用 `AccuXSetup-{version}.bin` 存放，校验文件仍使用 `AccuXSetup-{version}.exe.sha256` 存放，清单中的两类地址均指向 jsDelivr。
+GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-{version}.exe.sha256`。客户端不自动执行 SHA-256 校验，用户可在需要时手动核验。
 
 ## 日志
 
@@ -239,14 +239,14 @@ ISCC.exe /DAccuXVersion=1.4 /DAccuXFileVersion=1.4.0.0 installer\AccuX.iss
 
 `.github/workflows/build-release.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
 
-只有两段版本 tag 才会创建正式 Release，并同步生成 jsDelivr 更新清单：
+只有两段版本 tag 才会创建正式 GitHub Release：
 
 ```powershell
 git tag v1.4
 git push origin v1.4
 ```
 
-`v1.4` 会生成 `AccuXSetup-1.4.exe`、对应的 SHA-256 文件，发布名为 `AccuX v1.4` 的 Release，并推送到 jsDelivr 更新分支。`v1.4.0`、`v01.4` 和 `v1.4-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+`v1.4` 会生成 `AccuXSetup-1.4.exe`、对应的 SHA-256 文件并发布名为 `AccuX v1.4` 的 GitHub Release。`v1.4.0`、`v01.4` 和 `v1.4-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
 
 ## 人工验证清单
 
@@ -261,7 +261,7 @@ git push origin v1.4
 7. 在选区内隐藏行或列，确认修改型功能和标记功能均不写入隐藏单元格，选区求和不计入隐藏数字。
 8. 打开“设置”，确认版本号、统一阈值和自动升级选项；修改并保存后，基础财务功能与区域对比均使用新阈值，取消则不生效。
 9. 选区超过 `maxProcessCells` 时确认被拒绝；超过 `largeSelectionWarning` 时确认弹出确认框。
-10. 手动检查升级，确认“已是最新”或新版本信息；新版本安装前确认 SHA-256 校验、保存提示和普通安装启动行为。
+10. 手动检查升级，确认“已是最新”或新版本信息；发现新版本后确认浏览器下载链接、保存提示和手动运行普通安装程序的流程。
 11. 选区求和后确认出现三行复制对话框；金额和万元金额为千分位、固定 2 位小数，大写金额可正常复制且窗口在点击按钮后关闭。
 12. 在包含可见、隐藏和非常隐藏工作表的工作簿中执行“生成目录”，确认仅列出可见工作表、目录位于首位且名称可跳转；对同一工作簿再次执行“生成目录”，确认弹出替换确认框——选择“是”时旧“目录”表被删除并生成不含自身的新目录，选择“否”时不改动工作簿。
 13. 点击“存在对比”，分别捕获两个工作簿或工作表的连续区域，确认区域1独有、区域2独有、相同项、标题排除、隐藏数据跳过、重复次数、底色标记、清除标记和四张导出表均符合预期。
