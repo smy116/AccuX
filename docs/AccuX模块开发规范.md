@@ -423,6 +423,8 @@ Write(target, writePlan)
 日志 + OperationResult / CommandResult + 用户提示
 ```
 
+批量选区的 Host 捕获规则：财务四项、颜色标记和区域对比只处理当前 Selection 与当前工作表原生 `UsedRange` 的交集。交集后的范围才用于 `RangeTarget` 地址、单元格计数、批量读取和写回；交集为空时必须在读取或写回前终止。批注助手的单元格目标不套用该规则。
+
 ### 8.1 一次 Command 只能捕获一次 RangeTarget
 
 硬规则：
@@ -1234,6 +1236,7 @@ Agent 在宣布模块完成前，逐项检查：
 
 ```text
 [ ] 一次 Command 只捕获一次 RangeTarget
+[ ] 批量 RangeTarget 已限定在 Selection 与 UsedRange 的交集内
 [ ] 参数窗口后没有重新读取 Selection
 [ ] RangeTarget 不携带 COM 对象
 [ ] 使用批量 Read / Write，而非逐 Cell COM 高频操作
@@ -1388,7 +1391,7 @@ Agent 在宣布模块完成前，逐项检查：
 | 新功能需要 COM 怎么办？                  | Core 加功能窄接口 + 参数 DTO，Host/Features 加实现类，不扩展 IRangeOperationHost |
 | 是否新增模块动态发现？                   | 否                                                       |
 | 是否动态生成 Ribbon？                    | 否，使用静态 Ribbon XML                                  |
-| Range 目标怎么确定？                     | Command 开始时 CaptureTarget 一次                        |
+| Range 目标怎么确定？                     | Command 开始时捕获一次 Selection 与 UsedRange 的交集    |
 | 参数窗口后是否重新读 Selection？         | 否                                                       |
 | 大 Range 怎么处理？                      | 阈值内整块批量；超过 maxProcessCells 拒绝                |
 | 是否 Chunk 边读边写？                    | 否                                                       |
@@ -1414,7 +1417,7 @@ Ribbon XML
 CommandDispatcher
   ↓
 NormalizeDifferenceCommand
-  ├─ CaptureTarget() 一次
+  ├─ CaptureTarget() 一次（Selection ∩ UsedRange）
   ├─ 打开参数窗口（如需要）
   ├─ 读取 ConfigManager 默认容差
   ├─ 调用 RangeOperationPipeline

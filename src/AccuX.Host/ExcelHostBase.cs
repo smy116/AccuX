@@ -67,6 +67,182 @@ namespace AccuX.Host
             }
         }
 
+        /// <summary>
+        /// 将单区域选区限制为当前工作表原生 UsedRange 的交集。
+        /// <para>
+        /// 该方法只供批量选区功能使用；基础 Selection 获取保持原样，
+        /// 以便批注助手等单元格功能继续支持 UsedRange 外的目标。
+        /// </para>
+        /// </summary>
+        protected Excel.Range RestrictSelectionToUsedRange(
+            Excel.Worksheet worksheet,
+            Excel.Range selection)
+        {
+            if (selection == null)
+            {
+                return null;
+            }
+
+            if (worksheet == null)
+            {
+                throw new ArgumentNullException(nameof(worksheet));
+            }
+
+            if (!TryReadRangeBounds(selection, out var selectionBounds))
+            {
+                throw new HostOperationException("无法确定当前选区范围，请重新选择一个区域。");
+            }
+
+            Excel.Range usedRange;
+            try
+            {
+                usedRange = worksheet.UsedRange;
+            }
+            catch (Exception ex)
+            {
+                throw new HostOperationException("无法读取当前工作表的 UsedRange，请重试。", ex);
+            }
+
+            if (usedRange == null || !TryReadRangeBounds(usedRange, out var usedRangeBounds))
+            {
+                throw new HostOperationException("无法确定当前工作表的 UsedRange，请重试。");
+            }
+
+            if (!TryIntersectRangeBounds(selectionBounds, usedRangeBounds, out var intersection))
+            {
+                throw new HostOperationException(
+                    "当前选区与 UsedRange 没有交集，请选择 UsedRange 内的区域。");
+            }
+
+            if (intersection.Equals(selectionBounds))
+            {
+                return selection;
+            }
+
+            try
+            {
+                var firstCell = (Excel.Range)worksheet.Cells[
+                    intersection.FirstRow,
+                    intersection.FirstColumn];
+                var lastCell = (Excel.Range)worksheet.Cells[
+                    intersection.LastRow,
+                    intersection.LastColumn];
+                var clipped = worksheet.Range[firstCell, lastCell];
+                if (clipped == null)
+                {
+                    throw new HostOperationException("无法构造 UsedRange 内的有效选区，请重试。");
+                }
+
+                return clipped;
+            }
+            catch (HostOperationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new HostOperationException("无法构造 UsedRange 内的有效选区，请重试。", ex);
+            }
+        }
+
+        /// <summary>
+        /// 计算两个矩形范围的交集。该纯逻辑方法同时用于 Host 计算和单元测试。
+        /// </summary>
+        internal static bool TryIntersectRangeBounds(
+            RangeBounds selection,
+            RangeBounds usedRange,
+            out RangeBounds intersection)
+        {
+            var firstRow = Math.Max(selection.FirstRow, usedRange.FirstRow);
+            var lastRow = Math.Min(selection.LastRow, usedRange.LastRow);
+            var firstColumn = Math.Max(selection.FirstColumn, usedRange.FirstColumn);
+            var lastColumn = Math.Min(selection.LastColumn, usedRange.LastColumn);
+
+            if (firstRow > lastRow || firstColumn > lastColumn)
+            {
+                intersection = default(RangeBounds);
+                return false;
+            }
+
+            intersection = new RangeBounds(firstRow, lastRow, firstColumn, lastColumn);
+            return true;
+        }
+
+        private static bool TryReadRangeBounds(Excel.Range range, out RangeBounds bounds)
+        {
+            bounds = default(RangeBounds);
+            if (range == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var firstRow = Convert.ToInt32(range.Row, CultureInfo.InvariantCulture);
+                var firstColumn = Convert.ToInt32(range.Column, CultureInfo.InvariantCulture);
+                var rowCount = Convert.ToInt32(range.Rows.Count, CultureInfo.InvariantCulture);
+                var columnCount = Convert.ToInt32(range.Columns.Count, CultureInfo.InvariantCulture);
+
+                if (firstRow <= 0 || firstColumn <= 0 || rowCount <= 0 || columnCount <= 0)
+                {
+                    return false;
+                }
+
+                var lastRow = checked(firstRow + rowCount - 1);
+                var lastColumn = checked(firstColumn + columnCount - 1);
+                bounds = new RangeBounds(firstRow, lastRow, firstColumn, lastColumn);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal struct RangeBounds : IEquatable<RangeBounds>
+        {
+            public RangeBounds(int firstRow, int lastRow, int firstColumn, int lastColumn)
+            {
+                FirstRow = firstRow;
+                LastRow = lastRow;
+                FirstColumn = firstColumn;
+                LastColumn = lastColumn;
+            }
+
+            public int FirstRow { get; }
+
+            public int LastRow { get; }
+
+            public int FirstColumn { get; }
+
+            public int LastColumn { get; }
+
+            public bool Equals(RangeBounds other)
+            {
+                return FirstRow == other.FirstRow
+                    && LastRow == other.LastRow
+                    && FirstColumn == other.FirstColumn
+                    && LastColumn == other.LastColumn;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is RangeBounds other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    var hash = FirstRow;
+                    hash = (hash * 397) ^ LastRow;
+                    hash = (hash * 397) ^ FirstColumn;
+                    hash = (hash * 397) ^ LastColumn;
+                    return hash;
+                }
+            }
+        }
+
         protected virtual Excel.Workbook ResolveWorkbook(RangeTarget target)
         {
             if (target == null || string.IsNullOrEmpty(target.WorkbookKey))

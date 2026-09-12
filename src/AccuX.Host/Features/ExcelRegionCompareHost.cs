@@ -55,11 +55,17 @@ namespace AccuX.Host.Features
             }
 
             var areas = SafeAreaCount(selection);
+            var originalRows = SafeRowCount(selection);
+            var originalColumns = SafeColumnCount(selection);
+            if (areas > 1) throw new HostOperationException("区域对比不支持多区域选区，请选择单个连续区域。");
+            if (originalRows <= 0 || originalColumns <= 0) throw new HostOperationException("当前选区为空。");
+
+            // 区域对比与基础财务批量操作使用相同的 UsedRange 限定规则。
+            selection = RestrictSelectionToUsedRange(worksheet, selection);
             var rows = SafeRowCount(selection);
             var columns = SafeColumnCount(selection);
             var cells = (long)rows * columns;
-            if (areas > 1) throw new HostOperationException("区域对比不支持多区域选区，请选择单个连续区域。");
-            if (rows <= 0 || columns <= 0) throw new HostOperationException("当前选区为空。");
+            if (rows <= 0 || columns <= 0) throw new HostOperationException("UsedRange 内没有可处理的单元格。");
             if (cells > _options.MaxProcessCells)
             {
                 throw new HostOperationException("当前选区包含 " + cells + " 个单元格，超过区域对比上限 " + _options.MaxProcessCells + "。");

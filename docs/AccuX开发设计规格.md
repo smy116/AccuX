@@ -296,6 +296,8 @@ V1 对 Selection 的使用遵循：
 
 原因是金额折合、自定义舍入等命令可能在执行过程中打开 WPF 参数窗口。用户在窗口打开期间可能切换工作表、Workbook 或 Selection。如果写回阶段重新读取当前 Selection，存在写入错误区域的风险。
 
+对于财务四项、颜色标记和区域对比，Host 在固化目标前先计算当前 Selection 与当前工作表原生 `UsedRange` 的交集。交集为空时操作失败；交集后的地址、行数、列数和单元格数量构成唯一的 `RangeTarget`。原生 `UsedRange` 的定义保留宿主行为，因此仅由格式导致的已使用范围也计入。批注助手仍使用原始 Selection 的单元格目标。
+
 建议由 Core 定义纯 CLR 的目标描述：
 
 ```csharp
@@ -326,7 +328,7 @@ public sealed class RangeTarget
 ```text
 用户点击 Ribbon
         ↓
-CaptureTarget()  ← 唯一一次读取当前 Selection
+CaptureTarget()  ← 唯一一次读取 Selection，并限制到 UsedRange 交集
         ↓
 需要时打开 WPF 参数窗口
         ↓
@@ -341,7 +343,7 @@ Write(target, writePlan)
 
 V1 Host 重点提供：
 
-- 从当前 Selection 创建 `RangeTarget`；
+- 从当前 Selection 与当前工作表 `UsedRange` 的交集创建 `RangeTarget`；
 - 判断 Selection 是否为可处理的 Range；
 - 判断是否为多区域 Selection；
 - 判断是否包含合并单元格；
@@ -355,11 +357,12 @@ V1 Host 重点提供：
 
 隐藏行与隐藏列的处理规则：
 
-- `RangeTarget` 的行数、列数和单元格数量仍按完整矩形选区计算；
+- `RangeTarget` 的地址、行数、列数和单元格数量按 Selection 与 `UsedRange` 的交集计算；
 - Host 在 `Read(target)` 阶段识别每个单元格所在行、列是否隐藏，并写入 `CellData`；
 - `RangeOperationPipeline` 统一跳过隐藏行/列中的单元格，修改型业务 Module 不重复实现该规则；只读业务按同一 `CellData.IsHidden` 元数据过滤；
 - `ValidateWrite(target, writePlan)` 再次检查待写单元格的隐藏状态，若读取后状态发生变化则终止写回；
 - 结果统计区分选区是否包含隐藏行、隐藏列，并统计被跳过的隐藏单元格数量。
+- 原始 Selection 与 `UsedRange` 无交集时，Host 在读取前终止操作，不绕过范围限制。
 
 V1 在 `maxProcessCells` 硬限制以内采用整块批量读取和内存处理：
 
@@ -1716,8 +1719,9 @@ Selection 只用于创建一次 `RangeTarget`。
 - Selection 是否为 Range；
 - Selection 是否为空；
 - 是否为不支持的多区域或特殊区域；
-- CellCount 是否超过 `largeSelectionWarning`；
-- CellCount 是否超过 `maxProcessCells`。
+- Selection 与当前工作表 `UsedRange` 是否存在交集；
+- 交集后的有效目标 `CellCount` 是否超过 `largeSelectionWarning`；
+- 交集后的有效目标 `CellCount` 是否超过 `maxProcessCells`。
 
 创建 Target 后：
 

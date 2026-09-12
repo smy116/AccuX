@@ -60,12 +60,10 @@ namespace AccuX.Host
             }
 
             var areas = SafeAreaCount(selection);
-            var rowCount = SafeRowCount(selection);
-            var columnCount = SafeColumnCount(selection);
-            var cellCount = (long)rowCount * columnCount;
-            var address = SafeAddress(selection);
+            var originalRowCount = SafeRowCount(selection);
+            var originalColumnCount = SafeColumnCount(selection);
 
-            if (rowCount <= 0 || columnCount <= 0)
+            if (originalRowCount <= 0 || originalColumnCount <= 0)
             {
                 throw new HostOperationException("当前选区为空，请先选择一个数据区域。");
             }
@@ -73,6 +71,19 @@ namespace AccuX.Host
             if (areas > 1)
             {
                 throw new HostOperationException("V1 不支持多区域选区，请选择单个连续区域后重试。");
+            }
+
+            // 批量功能只在当前 Selection 与工作表原生 UsedRange 的交集内生效。
+            // Selection 本身仍由 GetSelectionRange 原样获取，批注助手等单元格功能不受影响。
+            selection = RestrictSelectionToUsedRange(worksheet, selection);
+            var rowCount = SafeRowCount(selection);
+            var columnCount = SafeColumnCount(selection);
+            var cellCount = (long)rowCount * columnCount;
+            var address = SafeAddress(selection);
+
+            if (rowCount <= 0 || columnCount <= 0)
+            {
+                throw new HostOperationException("UsedRange 内没有可处理的单元格，请重新选择数据区域。");
             }
 
             if (cellCount > _options.MaxProcessCells)
