@@ -1759,7 +1759,7 @@ WPF 主要用于：
 
 窗口必须正确设置 Excel/WPS 主窗口为 Owner。
 
-设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；运行时从 GitHub Releases API 获取最新稳定 Release、更新说明和安装包下载地址。API 响应必须包含精确的两段式稳定版本 tag 及对应的 `AccuXSetup-{version}.exe` GitHub asset；客户端只在浏览器中打开 `browser_download_url`，不下载、校验或启动安装程序。发现新版本后提示用户进入设置并手动下载安装；更新服务不可用时只记录日志，不影响插件运行。
+设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；运行时从 GitHub Releases API 获取最新稳定 Release、更新说明和安装包下载地址。API 直连失败时自动重试 `gh-proxy.com`（将完整 GitHub URL 前置 `https://gh-proxy.com/`），通过代理取得的 Release 后续也使用代理地址。API 响应必须包含精确的两段式稳定版本 tag 及对应的 `AccuXSetup-{version}.exe` GitHub asset；客户端只在浏览器中打开 `browser_download_url`，不下载、校验或启动安装程序。发现新版本后提示用户进入设置并手动下载安装；GitHub 及代理均不可用时只记录日志，不影响插件运行。
 
 ---
 

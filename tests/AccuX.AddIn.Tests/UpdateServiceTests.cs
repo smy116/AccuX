@@ -50,15 +50,67 @@ namespace AccuX.AddIn.Tests
         }
 
         [Fact]
+        public async Task CheckLatest_FallsBackToGhProxyWhenGitHubIsUnavailable()
+        {
+            var requested = new System.Collections.Generic.List<string>();
+            var client = CreateClient(request =>
+            {
+                requested.Add(request.RequestUri.AbsoluteUri);
+                if (request.RequestUri.AbsoluteUri == GitHubReleaseService.LatestReleaseUrl)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadGateway);
+                }
+
+                if (request.RequestUri.AbsoluteUri == GitHubReleaseService.ProxyLatestReleaseUrl)
+                {
+                    return JsonResponse(ReleaseJson("1.4"));
+                }
+
+                throw new InvalidOperationException("unexpected URL: " + request.RequestUri.AbsoluteUri);
+            });
+            var service = new GitHubReleaseService(NullLogger.Instance, client);
+
+            var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            Assert.True(result.IsSuccessful);
+            Assert.Equal(2, requested.Count);
+            Assert.Equal(GitHubReleaseService.LatestReleaseUrl, requested[0]);
+            Assert.Equal(GitHubReleaseService.ProxyLatestReleaseUrl, requested[1]);
+            Assert.Equal(
+                "https://gh-proxy.com/https://github.com/smy116/AccuX/releases/download/v1.4/AccuXSetup-1.4.exe",
+                result.LatestRelease.InstallerUrl);
+            Assert.Equal(
+                "https://gh-proxy.com/https://github.com/smy116/AccuX/releases/tag/v1.4",
+                result.LatestRelease.HtmlUrl);
+        }
+
+        [Fact]
+        public void GetProxyUrl_PrefixesSupportedGitHubUrl()
+        {
+            Assert.Equal(
+                "https://gh-proxy.com/https://github.com/smy116/AccuX/releases/download/v1.4/AccuXSetup-1.4.exe",
+                GitHubReleaseService.GetProxyUrl("https://github.com/smy116/AccuX/releases/download/v1.4/AccuXSetup-1.4.exe"));
+            Assert.Equal(
+                "https://gh-proxy.com/https://api.github.com/repos/smy116/AccuX/releases/latest",
+                GitHubReleaseService.GetProxyUrl("https://api.github.com/repos/smy116/AccuX/releases/latest"));
+        }
+
+        [Fact]
         public async Task CheckLatest_HttpErrorReturnsFailure()
         {
-            var client = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+            var requests = 0;
+            var client = CreateClient(_ =>
+            {
+                requests++;
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
             var service = new GitHubReleaseService(NullLogger.Instance, client);
 
             var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
 
             Assert.False(result.IsSuccessful);
             Assert.Contains("HTTP 404", result.ErrorMessage);
+            Assert.Equal(1, requests);
         }
 
         [Theory]

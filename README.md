@@ -184,7 +184,7 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 设置窗口可显示当前版本并手动检查 GitHub Release。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、API 响应错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，点击“下载升级包”会在浏览器中打开 GitHub 安装包地址，用户下载后手动运行普通 Inno Setup 安装程序；安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本号（例如 `1.4`）。
 
-插件运行时从 GitHub Releases API 读取最新稳定版本：`https://api.github.com/repos/smy116/AccuX/releases/latest`。API 返回 Release 元数据及 `AccuXSetup-{version}.exe` 的 `browser_download_url`；客户端只打开该 HTTPS 地址，不在本地下载、校验或启动安装程序。GitHub API 不可用、响应无效或 Release 缺少安装包时，升级检测静默失败，不影响插件正常使用。
+插件运行时从 GitHub Releases API 读取最新稳定版本：`https://api.github.com/repos/smy116/AccuX/releases/latest`。如果 GitHub 直连失败，会自动重试 `gh-proxy.com` 代理地址（完整 URL 前置 `https://gh-proxy.com/`）。API 返回 Release 元数据及 `AccuXSetup-{version}.exe` 的 `browser_download_url`；客户端只打开该 HTTPS 地址，不在本地下载、校验或启动安装程序；通过代理取得的 Release 会同时使用代理下载和说明地址。GitHub 及代理均不可用、响应无效或 Release 缺少安装包时，升级检测静默失败，不影响插件正常使用。
 
 GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-{version}.exe.sha256`。客户端不自动执行 SHA-256 校验，用户可在需要时手动核验。
 

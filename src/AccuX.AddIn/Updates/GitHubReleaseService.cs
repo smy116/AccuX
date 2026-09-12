@@ -20,7 +20,9 @@ namespace AccuX.AddIn.Updates
     {
         private const string Repository = "smy116/AccuX";
         private const string GitHubHost = "github.com";
+        private const string ApiHost = "api.github.com";
         private const string UserAgent = "AccuX-UpdateChecker";
+        private const string ProxyBaseUrl = "https://gh-proxy.com/";
         private const string LatestReleaseApiUrl = "https://api.github.com/repos/" + Repository + "/releases/latest";
 
         private readonly HttpClient _client;
@@ -38,6 +40,16 @@ namespace AccuX.AddIn.Updates
             get { return LatestReleaseApiUrl; }
         }
 
+        internal static string ProxyLatestReleaseUrl
+        {
+            get { return ToProxyUrl(LatestReleaseApiUrl); }
+        }
+
+        internal static string GetProxyUrl(string githubUrl)
+        {
+            return ToProxyUrl(githubUrl);
+        }
+
         public async Task<UpdateCheckResult> CheckLatestAsync(
             string currentVersion,
             CancellationToken cancellationToken)
@@ -47,80 +59,25 @@ namespace AccuX.AddIn.Updates
                 return UpdateCheckResult.Failed(currentVersion, "当前版本号无法识别，无法检测升级。");
             }
 
-            try
+            var direct = await TryCheckLatestAsync(
+                currentVersion,
+                currentReleaseVersion,
+                LatestReleaseApiUrl,
+                false,
+                cancellationToken).ConfigureAwait(false);
+            if (!direct.TryProxy)
             {
-                using (var response = await _client.GetAsync(
-                    LatestReleaseApiUrl,
-                    cancellationToken).ConfigureAwait(false))
-                {
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        return UpdateCheckResult.Failed(
-                            currentVersion,
-                            "GitHub Release 请求失败（HTTP " + (int)response.StatusCode + "）。");
-                    }
-
-                    var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    var dto = JsonConvert.DeserializeObject<GitHubReleaseDto>(json);
-                    if (dto == null || dto.Draft || dto.Prerelease)
-                    {
-                        return UpdateCheckResult.Failed(currentVersion, "GitHub Release 数据无效。");
-                    }
-
-                    if (!ReleaseVersion.TryParse(dto.TagName, out var releaseVersion))
-                    {
-                        return UpdateCheckResult.Failed(
-                            currentVersion,
-                            "GitHub Release tag 不是受支持的两段式稳定版本。");
-                    }
-
-                    var installerName = "AccuXSetup-" + releaseVersion.Text + ".exe";
-                    var installer = FindInstaller(dto.Assets, installerName, dto.TagName, releaseVersion);
-                    if (installer == null)
-                    {
-                        return UpdateCheckResult.Failed(
-                            currentVersion,
-                            "GitHub Release 缺少有效的安装包附件。");
-                    }
-
-                    if (!IsGitHubReleasePageUrl(dto.HtmlUrl, dto.TagName))
-                    {
-                        return UpdateCheckResult.Failed(
-                            currentVersion,
-                            "GitHub Release 缺少有效的更新说明地址。");
-                    }
-
-                    var release = new UpdateReleaseInfo
-                    {
-                        TagName = dto.TagName.Trim(),
-                        Name = string.IsNullOrWhiteSpace(dto.Name) ? "AccuX v" + releaseVersion.Text : dto.Name,
-                        Body = dto.Body ?? string.Empty,
-                        HtmlUrl = dto.HtmlUrl,
-                        InstallerUrl = installer.BrowserDownloadUrl,
-                        Draft = dto.Draft,
-                        Prerelease = dto.Prerelease,
-                        PublishedAtUtc = dto.PublishedAtUtc,
-                        Version = releaseVersion,
-                        Assets = ConvertAssets(dto.Assets)
-                    };
-
-                    return UpdateCheckResult.Success(currentVersion, currentReleaseVersion, release);
-                }
+                return direct.Result;
             }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.Warn("GitHub Release 检测超时：" + ex.Message);
-                return UpdateCheckResult.Failed(currentVersion, "GitHub Release 检测超时，请稍后重试。");
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn("GitHub Release 检测失败：" + ex.Message);
-                return UpdateCheckResult.Failed(currentVersion, "无法连接 GitHub Release，请稍后重试。");
-            }
+
+            _logger.Warn("GitHub Release 直连失败，尝试 gh-proxy.com：" + direct.Result.ErrorMessage);
+            var proxy = await TryCheckLatestAsync(
+                currentVersion,
+                currentReleaseVersion,
+                ProxyLatestReleaseUrl,
+                true,
+                cancellationToken).ConfigureAwait(false);
+            return proxy.Result;
         }
 
         internal bool HasInstaller(UpdateReleaseInfo release, out string errorMessage)
@@ -133,13 +90,110 @@ namespace AccuX.AddIn.Updates
             }
 
             var installerName = "AccuXSetup-" + release.Version.Text + ".exe";
-            if (!IsGitHubAssetUrl(release.InstallerUrl, release.TagName, release.Version, installerName))
+            if (!IsSupportedAssetUrl(release.InstallerUrl, release.TagName, release.Version, installerName))
             {
                 errorMessage = "GitHub Release 安装包地址无效。";
                 return false;
             }
 
             return true;
+        }
+
+        private async Task<FetchResult> TryCheckLatestAsync(
+            string currentVersion,
+            ReleaseVersion currentReleaseVersion,
+            string endpoint,
+            bool useProxy,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                using (var response = await _client.GetAsync(
+                    endpoint,
+                    cancellationToken).ConfigureAwait(false))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var failed = UpdateCheckResult.Failed(
+                            currentVersion,
+                            "GitHub Release 请求失败（HTTP " + (int)response.StatusCode + "）。");
+                        return ShouldTryProxy(response.StatusCode)
+                            ? FetchResult.Retryable(failed)
+                            : FetchResult.Invalid(failed);
+                    }
+
+                    var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var dto = JsonConvert.DeserializeObject<GitHubReleaseDto>(json);
+                    if (dto == null || dto.Draft || dto.Prerelease)
+                    {
+                        return FetchResult.Invalid(UpdateCheckResult.Failed(currentVersion, "GitHub Release 数据无效。"));
+                    }
+
+                    if (!ReleaseVersion.TryParse(dto.TagName, out var releaseVersion))
+                    {
+                        return FetchResult.Invalid(UpdateCheckResult.Failed(
+                            currentVersion,
+                            "GitHub Release tag 不是受支持的两段式稳定版本。"));
+                    }
+
+                    var installerName = "AccuXSetup-" + releaseVersion.Text + ".exe";
+                    var installer = FindInstaller(dto.Assets, installerName, dto.TagName, releaseVersion);
+                    if (installer == null)
+                    {
+                        return FetchResult.Invalid(UpdateCheckResult.Failed(
+                            currentVersion,
+                            "GitHub Release 缺少有效的安装包附件。"));
+                    }
+
+                    if (!IsGitHubReleasePageUrl(dto.HtmlUrl, dto.TagName))
+                    {
+                        return FetchResult.Invalid(UpdateCheckResult.Failed(
+                            currentVersion,
+                            "GitHub Release 缺少有效的更新说明地址。"));
+                    }
+
+                    var release = new UpdateReleaseInfo
+                    {
+                        TagName = dto.TagName.Trim(),
+                        Name = string.IsNullOrWhiteSpace(dto.Name) ? "AccuX v" + releaseVersion.Text : dto.Name,
+                        Body = dto.Body ?? string.Empty,
+                        HtmlUrl = useProxy ? ToProxyUrl(dto.HtmlUrl) : dto.HtmlUrl,
+                        InstallerUrl = useProxy ? ToProxyUrl(installer.BrowserDownloadUrl) : installer.BrowserDownloadUrl,
+                        Draft = dto.Draft,
+                        Prerelease = dto.Prerelease,
+                        PublishedAtUtc = dto.PublishedAtUtc,
+                        Version = releaseVersion,
+                        Assets = ConvertAssets(dto.Assets, useProxy)
+                    };
+
+                    return FetchResult.Success(UpdateCheckResult.Success(currentVersion, currentReleaseVersion, release));
+                }
+            }
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.Warn("GitHub Release 检测超时：" + ex.Message);
+                return FetchResult.Retryable(UpdateCheckResult.Failed(
+                    currentVersion,
+                    "GitHub Release 检测超时，请稍后重试。"));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (JsonException ex)
+            {
+                _logger.Warn("GitHub Release 响应 JSON 无效：" + ex.Message);
+                return FetchResult.Invalid(UpdateCheckResult.Failed(
+                    currentVersion,
+                    "GitHub Release 响应数据无效。"));
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("GitHub Release 检测失败：" + ex.Message);
+                return FetchResult.Retryable(UpdateCheckResult.Failed(
+                    currentVersion,
+                    "无法连接 GitHub Release，请稍后重试。"));
+            }
         }
 
         private static HttpClient CreateHttpClient(TimeSpan timeout)
@@ -216,7 +270,9 @@ namespace AccuX.AddIn.Updates
             return null;
         }
 
-        private static IReadOnlyList<UpdateAsset> ConvertAssets(IReadOnlyList<GitHubAssetDto> assets)
+        private static IReadOnlyList<UpdateAsset> ConvertAssets(
+            IReadOnlyList<GitHubAssetDto> assets,
+            bool useProxy)
         {
             var result = new List<UpdateAsset>();
             if (assets == null)
@@ -234,7 +290,7 @@ namespace AccuX.AddIn.Updates
                 result.Add(new UpdateAsset
                 {
                     Name = asset.Name,
-                    DownloadUrl = asset.BrowserDownloadUrl,
+                    DownloadUrl = useProxy ? ToProxyUrl(asset.BrowserDownloadUrl) : asset.BrowserDownloadUrl,
                     Size = asset.Size
                 });
             }
@@ -256,6 +312,16 @@ namespace AccuX.AddIn.Updates
             return string.Equals(uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase)
                 && string.IsNullOrEmpty(uri.Query)
                 && string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        private static bool IsSupportedAssetUrl(
+            string value,
+            string tagName,
+            ReleaseVersion version,
+            string expectedFileName)
+        {
+            var direct = RemoveProxyPrefix(value);
+            return IsGitHubAssetUrl(direct, tagName, version, expectedFileName);
         }
 
         private static bool IsGitHubAssetUrl(
@@ -281,11 +347,77 @@ namespace AccuX.AddIn.Updates
                 && string.IsNullOrEmpty(uri.Fragment);
         }
 
+        private static string ToProxyUrl(string githubUrl)
+        {
+            if (string.IsNullOrWhiteSpace(githubUrl)
+                || githubUrl.StartsWith(ProxyBaseUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                return githubUrl;
+            }
+
+            if (!Uri.TryCreate(githubUrl, UriKind.Absolute, out var uri)
+                || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                || (!string.Equals(uri.Host, GitHubHost, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(uri.Host, ApiHost, StringComparison.OrdinalIgnoreCase)))
+            {
+                return githubUrl;
+            }
+
+            return ProxyBaseUrl + uri.AbsoluteUri;
+        }
+
+        private static string RemoveProxyPrefix(string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value)
+                && value.StartsWith(ProxyBaseUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                return value.Substring(ProxyBaseUrl.Length);
+            }
+
+            return value;
+        }
+
         private static bool IsSafeFileName(string value)
         {
             return !string.IsNullOrWhiteSpace(value)
                 && value.IndexOf('/') < 0
                 && value.IndexOf('\\') < 0;
+        }
+
+        private static bool ShouldTryProxy(HttpStatusCode statusCode)
+        {
+            return statusCode == HttpStatusCode.RequestTimeout
+                || statusCode == HttpStatusCode.Forbidden
+                || (int)statusCode == 429
+                || (int)statusCode >= 500;
+        }
+
+        private sealed class FetchResult
+        {
+            private FetchResult(UpdateCheckResult result, bool tryProxy)
+            {
+                Result = result;
+                TryProxy = tryProxy;
+            }
+
+            public UpdateCheckResult Result { get; }
+
+            public bool TryProxy { get; }
+
+            public static FetchResult Success(UpdateCheckResult result)
+            {
+                return new FetchResult(result, false);
+            }
+
+            public static FetchResult Invalid(UpdateCheckResult result)
+            {
+                return new FetchResult(result, false);
+            }
+
+            public static FetchResult Retryable(UpdateCheckResult result)
+            {
+                return new FetchResult(result, true);
+            }
         }
 
         private sealed class GitHubReleaseDto
