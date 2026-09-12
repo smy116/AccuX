@@ -5,7 +5,7 @@ using AccuX.Core.Updates;
 
 namespace AccuX.AddIn.Updates
 {
-    internal sealed class GitHubReleaseInfo
+    internal sealed class UpdateReleaseInfo
     {
         public string TagName { get; set; }
 
@@ -23,9 +23,9 @@ namespace AccuX.AddIn.Updates
 
         public ReleaseVersion Version { get; set; }
 
-        public IReadOnlyList<GitHubReleaseAsset> Assets { get; set; } = Array.Empty<GitHubReleaseAsset>();
+        public IReadOnlyList<UpdateAsset> Assets { get; set; } = Array.Empty<UpdateAsset>();
 
-        public GitHubReleaseAsset FindAsset(string name)
+        public UpdateAsset FindAsset(string name)
         {
             if (string.IsNullOrEmpty(name) || Assets == null)
             {
@@ -37,11 +37,11 @@ namespace AccuX.AddIn.Updates
         }
     }
 
-    internal sealed class GitHubReleaseAsset
+    internal sealed class UpdateAsset
     {
         public string Name { get; set; }
 
-        public string BrowserDownloadUrl { get; set; }
+        public string DownloadUrl { get; set; }
 
         public long Size { get; set; }
     }
@@ -60,14 +60,14 @@ namespace AccuX.AddIn.Updates
 
         public ReleaseVersion CurrentReleaseVersion { get; private set; }
 
-        public GitHubReleaseInfo LatestRelease { get; private set; }
+        public UpdateReleaseInfo LatestRelease { get; private set; }
 
         public string ErrorMessage { get; private set; }
 
         public static UpdateCheckResult Success(
             string currentVersion,
             ReleaseVersion currentReleaseVersion,
-            GitHubReleaseInfo latestRelease)
+            UpdateReleaseInfo latestRelease)
         {
             return new UpdateCheckResult
             {

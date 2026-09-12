@@ -35,7 +35,7 @@ namespace AccuX.AddIn.Tests
             var client = CreateClient(_ =>
             {
                 Interlocked.Increment(ref requests);
-                return LatestResponse("v1.4");
+                return LatestResponse("1.4");
             });
             var store = new AccuXSettingsStore(new JsonConfigManager(_path));
             store.RecordUpdateCheck(DateTime.UtcNow);
@@ -60,7 +60,7 @@ namespace AccuX.AddIn.Tests
             {
                 Interlocked.Increment(ref requests);
                 completed.TrySetResult(true);
-                return LatestResponse("v1.3");
+                return LatestResponse("1.3");
             });
             var store = new AccuXSettingsStore(new JsonConfigManager(_path));
 
@@ -90,7 +90,7 @@ namespace AccuX.AddIn.Tests
             var client = CreateClient(_ =>
             {
                 Interlocked.Increment(ref requests);
-                return LatestResponse("v1.4");
+                return LatestResponse("1.4");
             });
             var store = new AccuXSettingsStore(new JsonConfigManager(_path));
             store.SaveEditable(new AccuXSettings { AutoCheckForUpdates = false });
@@ -107,7 +107,7 @@ namespace AccuX.AddIn.Tests
         {
             return new UpdateCoordinator(
                 store,
-                new GitHubReleaseService(NullLogger.Instance, client),
+                new JsDelivrReleaseService(NullLogger.Instance, client),
                 new NoOpInstallerLauncher(),
                 NullLogger.Instance,
                 Dispatcher.CurrentDispatcher);
@@ -118,11 +118,15 @@ namespace AccuX.AddIn.Tests
             return new HttpClient(new StubHandler(responder));
         }
 
-        private static HttpResponseMessage LatestResponse(string tag)
+        private static HttpResponseMessage LatestResponse(string version)
         {
-            var json = "{\"tag_name\":\"" + tag + "\",\"name\":\"AccuX\",\"body\":\"\","
-                + "\"html_url\":\"https://github.com/smy116/AccuX/releases\","
-                + "\"draft\":false,\"prerelease\":false,\"assets\":[]}";
+            var installerName = "AccuXSetup-" + version + ".exe";
+            var installerUrl = JsDelivrReleaseService.GetAssetUrl(version, installerName);
+            var checksumUrl = JsDelivrReleaseService.GetAssetUrl(version, installerName + ".sha256");
+            var json = "{\"version\":\"" + version + "\",\"tag\":\"v" + version + "\","
+                + "\"name\":\"AccuX\",\"notes\":\"\","
+                + "\"releaseNotesUrl\":\"" + JsDelivrReleaseService.GetAssetUrl(version, "RELEASE-NOTES.md") + "\","
+                + "\"installerUrl\":\"" + installerUrl + "\",\"sha256Url\":\"" + checksumUrl + "\"}";
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(json)

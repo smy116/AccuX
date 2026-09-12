@@ -15,26 +15,41 @@ namespace AccuX.AddIn.Tests
     public sealed class UpdateServiceTests
     {
         [Fact]
-        public async Task CheckLatest_ReturnsNewStableRelease()
+        public async Task CheckLatest_ReturnsNewStableReleaseFromJsDelivrFeed()
         {
-            var client = CreateClient(request => JsonResponse(
-                "{\"tag_name\":\"v1.4\",\"name\":\"AccuX v1.4\",\"body\":\"修复问题\","
-                + "\"html_url\":\"https://github.com/smy116/AccuX/releases/tag/v1.4\","
-                + "\"draft\":false,\"prerelease\":false,\"assets\":[]}"));
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var client = CreateClient(request => JsonResponse(FeedJson("1.4")));
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
 
             var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
 
             Assert.True(result.IsSuccessful);
             Assert.True(result.HasUpdate);
             Assert.Equal("1.4", result.LatestRelease.Version.Text);
+            Assert.Contains("cdn.jsdelivr.net", result.LatestRelease.HtmlUrl);
+        }
+
+        [Fact]
+        public async Task CheckLatest_UsesOnlyJsDelivrFeedUrl()
+        {
+            Uri requested = null;
+            var client = CreateClient(request =>
+            {
+                requested = request.RequestUri;
+                return JsonResponse(FeedJson("1.4"));
+            });
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
+
+            await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            Assert.Equal(JsDelivrReleaseService.UpdateFeedUrl, requested.AbsoluteUri);
+            Assert.Equal("cdn.jsdelivr.net", requested.Host);
         }
 
         [Fact]
         public async Task CheckLatest_HttpErrorReturnsFailure()
         {
             var client = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
 
             var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
 
@@ -43,13 +58,13 @@ namespace AccuX.AddIn.Tests
         }
 
         [Theory]
-        [InlineData("1.4", "v1.4", false)]
-        [InlineData("1.10", "v1.4", false)]
-        [InlineData("1.4", "v1.10", true)]
-        public async Task CheckLatest_ComparesVersionsNumerically(string currentVersion, string tag, bool expectedUpdate)
+        [InlineData("1.4", "1.4", false)]
+        [InlineData("1.10", "1.4", false)]
+        [InlineData("1.4", "1.10", true)]
+        public async Task CheckLatest_ComparesVersionsNumerically(string currentVersion, string feedVersion, bool expectedUpdate)
         {
-            var client = CreateClient(_ => JsonResponse(ReleaseJson(tag, false)));
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var client = CreateClient(_ => JsonResponse(FeedJson(feedVersion)));
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
 
             var result = await service.CheckLatestAsync(currentVersion, CancellationToken.None);
 
@@ -58,12 +73,12 @@ namespace AccuX.AddIn.Tests
         }
 
         [Theory]
-        [InlineData("v1.4-beta", true)]
-        [InlineData("v1.4.1", false)]
-        public async Task CheckLatest_RejectsPrereleaseOrUnsupportedTag(string tag, bool prerelease)
+        [InlineData("1.4-beta")]
+        [InlineData("1.4.1")]
+        public async Task CheckLatest_RejectsPrereleaseOrUnsupportedVersion(string version)
         {
-            var client = CreateClient(_ => JsonResponse(ReleaseJson(tag, prerelease)));
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var client = CreateClient(_ => JsonResponse(FeedJson(version)));
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
 
             var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
 
@@ -71,36 +86,37 @@ namespace AccuX.AddIn.Tests
         }
 
         [Fact]
-        public async Task DownloadAndVerify_RequiresMatchingReleaseChecksum()
+        public async Task CheckLatest_RejectsMismatchedTag()
+        {
+            var client = CreateClient(_ => JsonResponse(FeedJson("1.4", tag: "v1.5")));
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
+
+            var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            Assert.False(result.IsSuccessful);
+            Assert.Contains("tag", result.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task DownloadAndVerify_RequiresMatchingJsDelivrChecksum()
         {
             var installerName = "AccuXSetup-1.4.exe";
+            var installerUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName);
+            var checksumUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName + ".sha256");
             var installerBytes = Encoding.UTF8.GetBytes("test installer");
             var hash = ComputeSha256(installerBytes);
             var responses = new Dictionary<string, HttpResponseMessage>(StringComparer.Ordinal)
             {
-                [LatestReleaseUrl] = LatestReleaseResponse(),
-                ["https://example.test/checksum"] = TextResponse(hash + " *" + installerName),
-                ["https://example.test/installer"] = new HttpResponseMessage(HttpStatusCode.OK)
+                [JsDelivrReleaseService.UpdateFeedUrl] = JsonResponse(FeedJson("1.4", installerUrl, checksumUrl)),
+                [checksumUrl] = TextResponse(hash + " *" + installerName),
+                [installerUrl] = new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new ByteArrayContent(installerBytes)
                 }
             };
             var client = CreateClient(request => responses[request.RequestUri.AbsoluteUri]);
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
             var check = await service.CheckLatestAsync("1.3", CancellationToken.None);
-            check.LatestRelease.Assets = new[]
-            {
-                new GitHubReleaseAsset
-                {
-                    Name = installerName,
-                    BrowserDownloadUrl = "https://example.test/installer"
-                },
-                new GitHubReleaseAsset
-                {
-                    Name = installerName + ".sha256",
-                    BrowserDownloadUrl = "https://example.test/checksum"
-                }
-            };
 
             var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
 
@@ -114,23 +130,20 @@ namespace AccuX.AddIn.Tests
         public async Task DownloadAndVerify_RejectsWrongChecksum()
         {
             var installerName = "AccuXSetup-1.4.exe";
+            var installerUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName);
+            var checksumUrl = JsDelivrReleaseService.GetAssetUrl("1.4", installerName + ".sha256");
             var responses = new Dictionary<string, HttpResponseMessage>(StringComparer.Ordinal)
             {
-                [LatestReleaseUrl] = LatestReleaseResponse(),
-                ["https://example.test/checksum"] = TextResponse(new string('0', 64) + " *" + installerName),
-                ["https://example.test/installer"] = new HttpResponseMessage(HttpStatusCode.OK)
+                [JsDelivrReleaseService.UpdateFeedUrl] = JsonResponse(FeedJson("1.4", installerUrl, checksumUrl)),
+                [checksumUrl] = TextResponse(new string('0', 64) + " *" + installerName),
+                [installerUrl] = new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new ByteArrayContent(Encoding.UTF8.GetBytes("test installer"))
                 }
             };
             var client = CreateClient(request => responses[request.RequestUri.AbsoluteUri]);
-            var service = new GitHubReleaseService(NullLogger.Instance, client);
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
             var check = await service.CheckLatestAsync("1.3", CancellationToken.None);
-            check.LatestRelease.Assets = new[]
-            {
-                new GitHubReleaseAsset { Name = installerName, BrowserDownloadUrl = "https://example.test/installer" },
-                new GitHubReleaseAsset { Name = installerName + ".sha256", BrowserDownloadUrl = "https://example.test/checksum" }
-            };
 
             var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
 
@@ -138,23 +151,42 @@ namespace AccuX.AddIn.Tests
             Assert.Contains("SHA-256", result.Message);
         }
 
+        [Fact]
+        public async Task DownloadAndVerify_RejectsNonJsDelivrAssetUrls()
+        {
+            var client = CreateClient(_ => JsonResponse(FeedJson(
+                "1.4",
+                "https://example.test/AccuXSetup-1.4.exe",
+                "https://example.test/AccuXSetup-1.4.exe.sha256")));
+            var service = new JsDelivrReleaseService(NullLogger.Instance, client);
+            var check = await service.CheckLatestAsync("1.3", CancellationToken.None);
+
+            var result = await service.DownloadAndVerifyAsync(check.LatestRelease, null, CancellationToken.None);
+
+            Assert.False(result.Succeeded);
+            Assert.Contains("jsDelivr", result.Message);
+        }
+
         private static HttpClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> responder)
         {
             return new HttpClient(new StubHandler(responder));
         }
 
-        private static string LatestReleaseUrl => "https://api.github.com/repos/smy116/AccuX/releases/latest";
-
-        private static HttpResponseMessage LatestReleaseResponse()
+        private static string FeedJson(
+            string version,
+            string installerUrl = null,
+            string checksumUrl = null,
+            string tag = null)
         {
-            return JsonResponse(ReleaseJson("v1.4", false));
-        }
-
-        private static string ReleaseJson(string tag, bool prerelease)
-        {
-            return "{\"tag_name\":\"" + tag + "\",\"name\":\"AccuX\",\"body\":\"\","
-                + "\"html_url\":\"https://github.com/smy116/AccuX/releases\","
-                + "\"draft\":false,\"prerelease\":" + prerelease.ToString().ToLowerInvariant() + ",\"assets\":[]}";
+            var installerName = "AccuXSetup-" + version + ".exe";
+            var assetRoot = "https://cdn.jsdelivr.net/gh/smy116/AccuX@update-feed/releases/" + version;
+            installerUrl = installerUrl ?? assetRoot + "/" + installerName;
+            checksumUrl = checksumUrl ?? assetRoot + "/" + installerName + ".sha256";
+            tag = tag ?? "v" + version;
+            return "{\"version\":\"" + version + "\",\"tag\":\"" + tag + "\",\"name\":\"AccuX v" + version
+                + "\",\"notes\":\"修复问题\",\"releaseNotesUrl\":\""
+                + assetRoot + "/RELEASE-NOTES.md"
+                + "\",\"installerUrl\":\"" + installerUrl + "\",\"sha256Url\":\"" + checksumUrl + "\"}";
         }
 
         private static HttpResponseMessage JsonResponse(string json)

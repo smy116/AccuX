@@ -15,12 +15,20 @@ using Newtonsoft.Json;
 namespace AccuX.AddIn.Updates
 {
     /// <summary>
-    /// 读取 AccuX 的公开 GitHub Release，并下载经过校验的安装包。
+    /// 读取 jsDelivr 上的静态更新清单，并下载经过校验的安装包。
+    ///
+    /// 运行时只访问 cdn.jsdelivr.net。GitHub Release 仍由发布流程维护，
+    /// 发布产物会同步到 jsDelivr 可读取的 update-feed 分支。
     /// </summary>
-    internal sealed class GitHubReleaseService
+    internal sealed class JsDelivrReleaseService
     {
         private const string Repository = "smy116/AccuX";
-        private const string LatestReleaseUrl = "https://api.github.com/repos/" + Repository + "/releases/latest";
+        private const string FeedBranch = "update-feed";
+        private const string LatestFeedPath = "latest.json";
+        private const string CdnHost = "cdn.jsdelivr.net";
+        private const string UserAgent = "AccuX-UpdateChecker";
+        private const string LatestFeedUrl = "https://cdn.jsdelivr.net/gh/" + Repository + "@" + FeedBranch + "/" + LatestFeedPath;
+
         private static readonly Regex ChecksumLine = new Regex(
             @"^\s*([0-9a-fA-F]{64})\s+\*?(.+?)\s*$",
             RegexOptions.CultureInvariant);
@@ -29,16 +37,24 @@ namespace AccuX.AddIn.Updates
         private readonly HttpClient _downloadClient;
         private readonly ILogger _logger;
 
-        public GitHubReleaseService(ILogger logger, HttpClient client = null, HttpClient downloadClient = null)
+        public JsDelivrReleaseService(ILogger logger, HttpClient client = null, HttpClient downloadClient = null)
         {
             _logger = logger ?? NullLogger.Instance;
-            _client = client ?? CreateHttpClient();
-            _downloadClient = downloadClient ?? (client == null ? CreateDownloadHttpClient() : client);
+            _client = client ?? CreateHttpClient(TimeSpan.FromSeconds(10));
+            _downloadClient = downloadClient ?? (client == null ? CreateHttpClient(TimeSpan.FromMinutes(5)) : client);
         }
 
+        /// <summary>
+        /// 设置窗口的“查看更新说明”按钮也只打开 jsDelivr 地址。
+        /// </summary>
         public static string ReleasePageUrl
         {
-            get { return "https://github.com/" + Repository + "/releases"; }
+            get { return LatestFeedUrl; }
+        }
+
+        internal static string UpdateFeedUrl
+        {
+            get { return LatestFeedUrl; }
         }
 
         public async Task<UpdateCheckResult> CheckLatestAsync(
@@ -53,39 +69,53 @@ namespace AccuX.AddIn.Updates
             try
             {
                 using (var response = await _client.GetAsync(
-                    LatestReleaseUrl,
+                    LatestFeedUrl,
                     cancellationToken).ConfigureAwait(false))
                 {
                     if (!response.IsSuccessStatusCode)
                     {
                         return UpdateCheckResult.Failed(
                             currentVersion,
-                            "GitHub Releases 请求失败（HTTP " + (int)response.StatusCode + "）。");
+                            "jsDelivr 更新清单请求失败（HTTP " + (int)response.StatusCode + "）。");
                     }
 
                     var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    var dto = JsonConvert.DeserializeObject<GitHubReleaseDto>(json);
+                    var dto = JsonConvert.DeserializeObject<JsDelivrUpdateFeedDto>(json);
                     if (dto == null || dto.Draft || dto.Prerelease)
                     {
-                        return UpdateCheckResult.Failed(currentVersion, "GitHub Release 数据无效。");
+                        return UpdateCheckResult.Failed(currentVersion, "jsDelivr 更新清单数据无效。");
                     }
 
-                    if (!ReleaseVersion.TryParse(dto.TagName, out var releaseVersion))
+                    if (!ReleaseVersion.TryParse(dto.Version, out var releaseVersion))
                     {
-                        return UpdateCheckResult.Failed(currentVersion, "GitHub Release 版本号不是受支持的两段式版本。");
+                        return UpdateCheckResult.Failed(currentVersion, "jsDelivr 更新清单版本号不是受支持的两段式稳定版本。");
                     }
 
-                    var release = new GitHubReleaseInfo
+                    var tagName = string.IsNullOrWhiteSpace(dto.Tag)
+                        ? "v" + releaseVersion.Text
+                        : dto.Tag.Trim();
+                    if (!ReleaseVersion.TryParse(tagName, out var tagVersion)
+                        || tagVersion.CompareTo(releaseVersion) != 0)
                     {
-                        TagName = dto.TagName,
-                        Name = dto.Name,
-                        Body = dto.Body,
-                        HtmlUrl = dto.HtmlUrl,
+                        return UpdateCheckResult.Failed(currentVersion, "jsDelivr 更新清单中的 tag 与版本号不一致。");
+                    }
+
+                    var installerName = "AccuXSetup-" + releaseVersion.Text + ".exe";
+                    var release = new UpdateReleaseInfo
+                    {
+                        TagName = tagName,
+                        Name = string.IsNullOrWhiteSpace(dto.Name) ? "AccuX v" + releaseVersion.Text : dto.Name,
+                        Body = dto.Notes ?? string.Empty,
+                        HtmlUrl = IsJsDelivrUrl(dto.ReleaseNotesUrl) ? dto.ReleaseNotesUrl : LatestFeedUrl,
                         Draft = dto.Draft,
                         Prerelease = dto.Prerelease,
-                        PublishedAtUtc = dto.PublishedAt,
+                        PublishedAtUtc = dto.PublishedAtUtc,
                         Version = releaseVersion,
-                        Assets = ConvertAssets(dto.Assets)
+                        Assets = new[]
+                        {
+                            new UpdateAsset { Name = installerName, DownloadUrl = dto.InstallerUrl },
+                            new UpdateAsset { Name = installerName + ".sha256", DownloadUrl = dto.Sha256Url }
+                        }
                     };
 
                     return UpdateCheckResult.Success(currentVersion, currentReleaseVersion, release);
@@ -93,8 +123,8 @@ namespace AccuX.AddIn.Updates
             }
             catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
-                _logger.Warn("GitHub Release 检测超时：" + ex.Message);
-                return UpdateCheckResult.Failed(currentVersion, "GitHub Releases 请求超时，请稍后重试。");
+                _logger.Warn("jsDelivr 更新检测超时：" + ex.Message);
+                return UpdateCheckResult.Failed(currentVersion, "jsDelivr 更新检测超时，请稍后重试。");
             }
             catch (OperationCanceledException)
             {
@@ -102,13 +132,13 @@ namespace AccuX.AddIn.Updates
             }
             catch (Exception ex)
             {
-                _logger.Warn("GitHub Release 检测失败：" + ex.Message);
-                return UpdateCheckResult.Failed(currentVersion, "无法连接 GitHub Releases，请稍后重试。");
+                _logger.Warn("jsDelivr 更新检测失败：" + ex.Message);
+                return UpdateCheckResult.Failed(currentVersion, "无法连接 jsDelivr 更新清单，请稍后重试。");
             }
         }
 
         public async Task<UpdateInstallResult> DownloadAndVerifyAsync(
-            GitHubReleaseInfo release,
+            UpdateReleaseInfo release,
             IProgress<double> progress,
             CancellationToken cancellationToken)
         {
@@ -122,7 +152,6 @@ namespace AccuX.AddIn.Updates
             }
 
             var installerName = "AccuXSetup-" + release.Version.Text + ".exe";
-
             var directory = Path.Combine(
                 Path.GetTempPath(),
                 "AccuX",
@@ -135,11 +164,11 @@ namespace AccuX.AddIn.Updates
             try
             {
                 Directory.CreateDirectory(directory);
-                var checksumText = await DownloadTextAsync(checksum.BrowserDownloadUrl, cancellationToken)
+                var checksumText = await DownloadTextAsync(checksum.DownloadUrl, cancellationToken)
                     .ConfigureAwait(false);
                 var expectedHash = ParseChecksum(checksumText, installerName);
 
-                await DownloadFileAsync(installer.BrowserDownloadUrl, temporaryPath, progress, cancellationToken)
+                await DownloadFileAsync(installer.DownloadUrl, temporaryPath, progress, cancellationToken)
                     .ConfigureAwait(false);
 
                 var actualHash = ComputeSha256(temporaryPath);
@@ -171,19 +200,23 @@ namespace AccuX.AddIn.Updates
             }
         }
 
-        internal bool HasRequiredAssets(GitHubReleaseInfo release, out string errorMessage)
+        internal bool HasRequiredAssets(UpdateReleaseInfo release, out string errorMessage)
         {
             return TryGetRequiredAssets(release, out _, out _, out errorMessage);
         }
 
-        private static HttpClient CreateHttpClient()
+        internal static string GetAssetUrl(string version, string fileName)
         {
-            return CreateHttpClient(TimeSpan.FromSeconds(10));
-        }
+            if (!ReleaseVersion.TryParse(version, out var releaseVersion)
+                || string.IsNullOrWhiteSpace(fileName)
+                || fileName.IndexOf('/') >= 0
+                || fileName.IndexOf('\\') >= 0)
+            {
+                throw new ArgumentException("版本号或文件名无效。", nameof(version));
+            }
 
-        private static HttpClient CreateDownloadHttpClient()
-        {
-            return CreateHttpClient(TimeSpan.FromMinutes(5));
+            return "https://cdn.jsdelivr.net/gh/" + Repository + "@" + FeedBranch
+                + "/releases/" + releaseVersion.Text + "/" + fileName;
         }
 
         private static HttpClient CreateHttpClient(TimeSpan timeout)
@@ -193,8 +226,8 @@ namespace AccuX.AddIn.Updates
             {
                 Timeout = timeout
             };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("AccuX-UpdateChecker");
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             return client;
         }
 
@@ -224,35 +257,9 @@ namespace AccuX.AddIn.Updates
             return ReleaseVersion.TryParse(parts[0] + "." + parts[1], out version);
         }
 
-        private static IReadOnlyList<GitHubReleaseAsset> ConvertAssets(GitHubReleaseAssetDto[] assets)
-        {
-            if (assets == null || assets.Length == 0)
-            {
-                return Array.Empty<GitHubReleaseAsset>();
-            }
-
-            var result = new GitHubReleaseAsset[assets.Length];
-            for (var i = 0; i < assets.Length; i++)
-            {
-                var asset = assets[i];
-                result[i] = asset == null
-                    ? null
-                    : new GitHubReleaseAsset
-                    {
-                        Name = asset.Name,
-                        BrowserDownloadUrl = asset.BrowserDownloadUrl,
-                        Size = asset.Size
-                    };
-            }
-
-            return result;
-        }
-
         private async Task<string> DownloadTextAsync(string url, CancellationToken cancellationToken)
         {
-            using (var response = await _client.GetAsync(
-                url,
-                cancellationToken).ConfigureAwait(false))
+            using (var response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false))
             {
                 if (!response.IsSuccessStatusCode)
                 {
@@ -353,16 +360,31 @@ namespace AccuX.AddIn.Updates
             }
         }
 
-        private static bool IsHttpsUrl(string value)
+        private static bool IsJsDelivrUrl(string value)
         {
             return Uri.TryCreate(value, UriKind.Absolute, out var uri)
-                && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(uri.Host, CdnHost, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsJsDelivrUrl(string value, string expectedFileName)
+        {
+            if (!IsJsDelivrUrl(value) || string.IsNullOrWhiteSpace(expectedFileName))
+            {
+                return false;
+            }
+
+            var uri = new Uri(value, UriKind.Absolute);
+            var path = uri.AbsolutePath.TrimEnd('/');
+            var separator = path.LastIndexOf('/');
+            var fileName = separator >= 0 ? path.Substring(separator + 1) : path;
+            return string.Equals(fileName, expectedFileName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetRequiredAssets(
-            GitHubReleaseInfo release,
-            out GitHubReleaseAsset installer,
-            out GitHubReleaseAsset checksum,
+            UpdateReleaseInfo release,
+            out UpdateAsset installer,
+            out UpdateAsset checksum,
             out string errorMessage)
         {
             installer = null;
@@ -370,7 +392,7 @@ namespace AccuX.AddIn.Updates
             errorMessage = null;
             if (release == null || release.Version == null)
             {
-                errorMessage = "没有可用的 Release 信息。";
+                errorMessage = "没有可用的更新信息。";
                 return false;
             }
 
@@ -379,10 +401,10 @@ namespace AccuX.AddIn.Updates
             installer = release.FindAsset(installerName);
             checksum = release.FindAsset(checksumName);
             if (installer == null || checksum == null
-                || !IsHttpsUrl(installer.BrowserDownloadUrl)
-                || !IsHttpsUrl(checksum.BrowserDownloadUrl))
+                || !IsJsDelivrUrl(installer.DownloadUrl, installerName)
+                || !IsJsDelivrUrl(checksum.DownloadUrl, checksumName))
             {
-                errorMessage = "Release 缺少预期的安装包或 SHA-256 校验文件，请打开发布页手动查看。";
+                errorMessage = "jsDelivr 更新清单缺少预期的安装包或 SHA-256 校验文件。";
                 return false;
             }
 
@@ -404,43 +426,37 @@ namespace AccuX.AddIn.Updates
             }
         }
 
-        private sealed class GitHubReleaseDto
+        private sealed class JsDelivrUpdateFeedDto
         {
-            [JsonProperty("tag_name")]
-            public string TagName { get; set; }
+            [JsonProperty("version")]
+            public string Version { get; set; }
+
+            [JsonProperty("tag")]
+            public string Tag { get; set; }
 
             [JsonProperty("name")]
             public string Name { get; set; }
 
-            [JsonProperty("body")]
-            public string Body { get; set; }
+            [JsonProperty("notes")]
+            public string Notes { get; set; }
 
-            [JsonProperty("html_url")]
-            public string HtmlUrl { get; set; }
+            [JsonProperty("releaseNotesUrl")]
+            public string ReleaseNotesUrl { get; set; }
+
+            [JsonProperty("installerUrl")]
+            public string InstallerUrl { get; set; }
+
+            [JsonProperty("sha256Url")]
+            public string Sha256Url { get; set; }
+
+            [JsonProperty("publishedAtUtc")]
+            public DateTime? PublishedAtUtc { get; set; }
 
             [JsonProperty("draft")]
             public bool Draft { get; set; }
 
             [JsonProperty("prerelease")]
             public bool Prerelease { get; set; }
-
-            [JsonProperty("published_at")]
-            public DateTime? PublishedAt { get; set; }
-
-            [JsonProperty("assets")]
-            public GitHubReleaseAssetDto[] Assets { get; set; }
-        }
-
-        private sealed class GitHubReleaseAssetDto
-        {
-            [JsonProperty("name")]
-            public string Name { get; set; }
-
-            [JsonProperty("browser_download_url")]
-            public string BrowserDownloadUrl { get; set; }
-
-            [JsonProperty("size")]
-            public long Size { get; set; }
         }
     }
 }

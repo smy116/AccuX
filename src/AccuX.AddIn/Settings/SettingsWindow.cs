@@ -163,7 +163,7 @@ namespace AccuX.AddIn.Settings
             _installButton = new Button { Content = "下载并安装", Width = 100, Height = 28, Margin = new Thickness(0, 0, 8, 0), IsEnabled = false };
             _installButton.Click += OnInstall;
             updateButtons.Children.Add(_installButton);
-            _releasePageButton = new Button { Content = "打开发布页", Width = 100, Height = 28, IsEnabled = false };
+            _releasePageButton = new Button { Content = "查看更新说明", Width = 110, Height = 28, IsEnabled = false };
             _releasePageButton.Click += OnOpenReleasePage;
             updateButtons.Children.Add(_releasePageButton);
             updatePanel.Children.Add(updateButtons);
@@ -333,7 +333,7 @@ namespace AccuX.AddIn.Settings
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "无法打开发布页：" + ex.Message, "AccuX", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(this, "无法打开更新说明：" + ex.Message, "AccuX", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

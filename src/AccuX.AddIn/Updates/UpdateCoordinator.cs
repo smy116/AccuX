@@ -15,7 +15,7 @@ namespace AccuX.AddIn.Updates
         private static readonly TimeSpan AutomaticCheckInterval = TimeSpan.FromHours(24);
 
         private readonly AccuXSettingsStore _settingsStore;
-        private readonly GitHubReleaseService _releaseService;
+        private readonly JsDelivrReleaseService _releaseService;
         private readonly IInstallerLauncher _installerLauncher;
         private readonly ILogger _logger;
         private readonly Dispatcher _uiDispatcher;
@@ -26,7 +26,7 @@ namespace AccuX.AddIn.Updates
 
         public UpdateCoordinator(
             AccuXSettingsStore settingsStore,
-            GitHubReleaseService releaseService,
+            JsDelivrReleaseService releaseService,
             IInstallerLauncher installerLauncher,
             ILogger logger,
             Dispatcher uiDispatcher,

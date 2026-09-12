@@ -1755,7 +1755,7 @@ WPF 主要用于：
 
 窗口必须正确设置 Excel/WPS 主窗口为 Owner。
 
-设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；仅当发现带有精确安装包与 SHA-256 附件的稳定 GitHub Release 时提示用户进入设置，下载校验通过后启动普通 Inno Setup 安装程序。
+设置窗口同时显示当前 `AccuXVersion`、最近升级检测状态，并提供自动检测开关和手动检测按钮。自动检测在插件启动后后台执行，每 24 小时最多一次；运行时只访问 jsDelivr 上的静态更新清单及其安装包、SHA-256 文件，清单必须指向精确的两段式稳定版本。发现新版本且下载校验通过后，提示用户进入设置并启动普通 Inno Setup 安装程序；jsDelivr 不可用时只记录日志，不影响插件运行。
 
 ---
 
@@ -1792,7 +1792,7 @@ JSON
 }
 ```
 
-`settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 GitHub Releases 检查，`lastUpdateCheckUtc` 由插件维护。
+`settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 jsDelivr 更新清单检查，`lastUpdateCheckUtc` 由插件维护。
 
 V1 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
 

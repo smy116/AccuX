@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - '**'
+      - '!update-feed'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -239,6 +240,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download installer artifact
         uses: actions/download-artifact@v4
         with:
@@ -284,3 +288,18 @@ jobs:
           & gh release edit $tag --repo $repository --draft=false
           if ($LASTEXITCODE -ne 0) { throw "公开 Release 失败：$tag" }
           Write-Host "已发布 AccuX v$($env:RELEASE_VERSION)。"
+
+      - name: Publish jsDelivr update feed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./tools/Publish-JsDelivrFeed.ps1 `
+            -Repository $env:REPOSITORY `
+            -Version $env:RELEASE_VERSION `
+            -TagName $env:TAG_NAME `
+            -ArtifactDirectory (Join-Path $env:GITHUB_WORKSPACE 'release-assets')
