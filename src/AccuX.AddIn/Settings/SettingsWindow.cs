@@ -1,9 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using AccuX.AddIn.Updates;
 using AccuX.Core.Configuration;
@@ -11,9 +9,9 @@ using AccuX.Core.Configuration;
 namespace AccuX.AddIn.Settings
 {
     /// <summary>
-    /// AccuX 应用级设置窗口。界面只负责编辑和呈现，配置保存与升级流程由组合根提供。
+    /// AccuX 应用级设置窗口。布局由 XAML 定义，配置保存与升级流程由组合根提供。
     /// </summary>
-    internal sealed class SettingsWindow : Window
+    internal sealed partial class SettingsWindow : Window
     {
         private readonly AccuXSettings _initialSettings;
         private readonly string _currentVersion;
@@ -21,16 +19,6 @@ namespace AccuX.AddIn.Settings
         private readonly UpdateCoordinator _updateCoordinator;
         private readonly Action<AccuXSettings> _applySettings;
 
-        private readonly TextBox _warningBox;
-        private readonly TextBox _maxBox;
-        private readonly CheckBox _autoCheckBox;
-        private readonly TextBlock _lastCheckText;
-        private readonly TextBlock _updateStatusText;
-        private readonly TextBox _releaseNotesBox;
-        private readonly Button _manualCheckButton;
-        private readonly Button _installButton;
-        private readonly Button _releasePageButton;
-        private readonly ProgressBar _downloadProgress;
         private UpdateCheckResult _lastCheckResult;
         private bool _busy;
 
@@ -49,148 +37,19 @@ namespace AccuX.AddIn.Settings
             _updateCoordinator = updateCoordinator ?? throw new ArgumentNullException(nameof(updateCoordinator));
             _applySettings = applySettings ?? throw new ArgumentNullException(nameof(applySettings));
 
-            Title = "AccuX 设置";
-            Width = 580;
-            MinWidth = 520;
-            SizeToContent = SizeToContent.Height;
-            ResizeMode = ResizeMode.NoResize;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            ShowInTaskbar = false;
+            InitializeComponent();
+
+            _currentVersionText.Text = "当前版本：" + FormatVersion(_currentVersion);
+            _configPathText.Text = "配置文件：" + _settingsStore.ConfigFilePath;
+            _warningBox.Text = _initialSettings.LargeSelectionWarning.ToString(CultureInfo.InvariantCulture);
+            _maxBox.Text = _initialSettings.MaxProcessCells.ToString(CultureInfo.InvariantCulture);
+            _autoCheckBox.IsChecked = _initialSettings.AutoCheckForUpdates;
+
             if (ownerHandle != IntPtr.Zero)
             {
                 new WindowInteropHelper(this).Owner = ownerHandle;
             }
 
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var info = new GroupBox { Header = "应用信息", Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 12) };
-            var infoPanel = new StackPanel();
-            infoPanel.Children.Add(new TextBlock
-            {
-                Text = "当前版本：" + FormatVersion(_currentVersion),
-                FontWeight = FontWeights.Bold
-            });
-            infoPanel.Children.Add(new TextBlock
-            {
-                Text = "配置文件：" + _settingsStore.ConfigFilePath,
-                Margin = new Thickness(0, 8, 0, 0),
-                TextWrapping = TextWrapping.Wrap
-            });
-            info.Content = infoPanel;
-            Grid.SetRow(info, 0);
-            root.Children.Add(info);
-
-            var processing = new GroupBox { Header = "处理限制", Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 12) };
-            var processingGrid = new Grid();
-            processingGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
-            processingGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            processingGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            processingGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            processingGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            processingGrid.Children.Add(new TextBlock
-            {
-                Text = "警告单元格数量：",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 8)
-            });
-            _warningBox = CreateNumberBox(_initialSettings.LargeSelectionWarning);
-            Grid.SetColumn(_warningBox, 1);
-            processingGrid.Children.Add(_warningBox);
-
-            var maxLabel = new TextBlock
-            {
-                Text = "最大单元格数量：",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 8)
-            };
-            Grid.SetRow(maxLabel, 1);
-            processingGrid.Children.Add(maxLabel);
-            _maxBox = CreateNumberBox(_initialSettings.MaxProcessCells);
-            Grid.SetRow(_maxBox, 1);
-            Grid.SetColumn(_maxBox, 1);
-            processingGrid.Children.Add(_maxBox);
-
-            var help = new TextBlock
-            {
-                Text = "警告阈值以上会请求确认；最大阈值以上会拒绝处理。区域对比使用两个区域的合计数量。",
-                Foreground = System.Windows.Media.Brushes.Gray,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            Grid.SetRow(help, 2);
-            Grid.SetColumnSpan(help, 2);
-            processingGrid.Children.Add(help);
-            processing.Content = processingGrid;
-            Grid.SetRow(processing, 1);
-            root.Children.Add(processing);
-
-            var updates = new GroupBox { Header = "升级", Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 12) };
-            var updatePanel = new StackPanel();
-            _autoCheckBox = new CheckBox
-            {
-                Content = "启动后自动检测升级（每天最多一次）",
-                IsChecked = _initialSettings.AutoCheckForUpdates,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            updatePanel.Children.Add(_autoCheckBox);
-
-            _lastCheckText = new TextBlock { Foreground = System.Windows.Media.Brushes.Gray, TextWrapping = TextWrapping.Wrap };
-            updatePanel.Children.Add(_lastCheckText);
-            _updateStatusText = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 6) };
-            updatePanel.Children.Add(_updateStatusText);
-
-            _releaseNotesBox = new TextBox
-            {
-                IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap,
-                AcceptsReturn = true,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Height = 100,
-                Visibility = Visibility.Collapsed,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            updatePanel.Children.Add(_releaseNotesBox);
-
-            var updateButtons = new StackPanel { Orientation = Orientation.Horizontal };
-            _manualCheckButton = new Button { Content = "手动检测升级", Width = 110, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
-            _manualCheckButton.Click += OnManualCheck;
-            updateButtons.Children.Add(_manualCheckButton);
-            _installButton = new Button { Content = "下载并安装", Width = 100, Height = 28, Margin = new Thickness(0, 0, 8, 0), IsEnabled = false };
-            _installButton.Click += OnInstall;
-            updateButtons.Children.Add(_installButton);
-            _releasePageButton = new Button { Content = "查看更新说明", Width = 110, Height = 28, IsEnabled = false };
-            _releasePageButton.Click += OnOpenReleasePage;
-            updateButtons.Children.Add(_releasePageButton);
-            updatePanel.Children.Add(updateButtons);
-
-            _downloadProgress = new ProgressBar
-            {
-                Height = 5,
-                Minimum = 0,
-                Maximum = 100,
-                Visibility = Visibility.Collapsed,
-                Margin = new Thickness(0, 10, 0, 0)
-            };
-            updatePanel.Children.Add(_downloadProgress);
-            updates.Content = updatePanel;
-            Grid.SetRow(updates, 2);
-            root.Children.Add(updates);
-
-            var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var saveButton = new Button { Content = "保存", Width = 76, Height = 28, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-            saveButton.Click += OnSave;
-            footer.Children.Add(saveButton);
-            var cancelButton = new Button { Content = "取消", Width = 76, Height = 28, IsCancel = true };
-            footer.Children.Add(cancelButton);
-            Grid.SetRow(footer, 3);
-            root.Children.Add(footer);
-
-            Content = root;
             ShowCheckResult(initialCheckResult, false);
             UpdateLastCheckText(_settingsStore.Current.LastUpdateCheckUtc);
         }
@@ -403,17 +262,6 @@ namespace AccuX.AddIn.Settings
             _lastCheckText.Text = utc.HasValue
                 ? "上次检测：" + utc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture)
                 : "上次检测：尚未检测";
-        }
-
-        private static TextBox CreateNumberBox(long value)
-        {
-            return new TextBox
-            {
-                Text = value.ToString(CultureInfo.InvariantCulture),
-                Padding = new Thickness(5, 3, 5, 3),
-                Margin = new Thickness(0, 0, 0, 8),
-                HorizontalContentAlignment = HorizontalAlignment.Left
-            };
         }
 
         private static string FormatVersion(string version)
