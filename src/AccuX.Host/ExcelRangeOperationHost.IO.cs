@@ -805,13 +805,37 @@ namespace AccuX.Host
                 return;
             }
 
-            if (IsFull(mask, rowCount, columnCount))
+            // NumberFormat 的 COM 属性并不支持像 Value2/Formula 一样稳定地接收二维数组。
+            // Excel/WPS 在此处可能已经完成了 Value2 写回，但对二维 NumberFormat 赋值返回
+            // 0x80004005 (E_FAIL)，从而表现为“结果已写入但命令报错”。按连续且格式相同的
+            // 区段使用标量字符串写回，既保留批量写入，又兼容两种宿主。
+            for (var row = 0; row < rowCount; row++)
             {
-                range.NumberFormat = matrix;
-                return;
-            }
+                var column = 0;
+                while (column < columnCount)
+                {
+                    if (!mask[row, column])
+                    {
+                        column++;
+                        continue;
+                    }
 
-            WriteBlockByMask(range, matrix, mask, rowCount, columnCount, (target, block) => target.NumberFormat = block);
+                    var start = column;
+                    var format = matrix[row, column]?.ToString();
+                    column++;
+
+                    while (column < columnCount
+                        && mask[row, column]
+                        && string.Equals(format, matrix[row, column]?.ToString(), StringComparison.Ordinal))
+                    {
+                        column++;
+                    }
+
+                    var width = column - start;
+                    var target = ((Excel.Range)range.Cells[row + 1, start + 1]).Resize[1, width];
+                    target.NumberFormat = format;
+                }
+            }
         }
 
         /// <summary>
