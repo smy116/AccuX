@@ -99,7 +99,11 @@ namespace AccuX.Host
             var workbookKey = BuildWorkbookKey(workbook);
             var worksheetKey = BuildWorksheetKey(worksheet);
             var worksheetName = SafeWorksheetName(worksheet);
-            var containsMerged = DetectMergedCells(selection, rowCount, columnCount);
+            var containsMerged = DetectMergedCells(selection);
+            if (containsMerged)
+            {
+                throw new HostOperationException("V1 不支持包含合并单元格的选区，请取消合并后重试。");
+            }
 
             return new RangeTarget(
                 workbookKey,
@@ -150,6 +154,17 @@ namespace AccuX.Host
                 if (SafeAreaCount(range) > 1)
                 {
                     return WriteCheckResult.Failure("目标区域已变为多区域，无法安全写入。");
+                }
+
+                if (SafeRowCount(range) != target.RowCount
+                    || SafeColumnCount(range) != target.ColumnCount)
+                {
+                    return WriteCheckResult.Failure("目标区域大小已发生变化，请重新选择后重试。");
+                }
+
+                if (DetectMergedCells(range))
+                {
+                    return WriteCheckResult.Failure("目标区域已包含合并单元格，无法安全写入。");
                 }
 
                 if (IsSheetProtected(worksheet))
@@ -217,7 +232,7 @@ namespace AccuX.Host
             return ReadNumberFormatMatrix(range, target.RowCount, target.ColumnCount);
         }
 
-        private static bool DetectMergedCells(Excel.Range range, int rowCount, int columnCount)
+        private static bool DetectMergedCells(Excel.Range range)
         {
             try
             {
@@ -230,9 +245,9 @@ namespace AccuX.Host
                 // 混合状态返回 null/DBNull：保守判定为包含合并单元格。
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                throw new HostOperationException("无法确认选区合并单元格状态，请重试。", ex);
             }
         }
     }

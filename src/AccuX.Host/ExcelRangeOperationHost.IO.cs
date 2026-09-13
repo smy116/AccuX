@@ -54,6 +54,11 @@ namespace AccuX.Host
             var formats = ReadNumberFormatMatrix(range, rowCount, columnCount);
             var merged = ReadMergedMatrix(range, rowCount, columnCount);
 
+            if (ContainsTrue(merged))
+            {
+                throw new HostOperationException("V1 不支持包含合并单元格的选区，请取消合并后重试。");
+            }
+
             var cells = new List<CellData>(rowCount * columnCount);
 
             for (var row = 0; row < rowCount; row++)
@@ -467,9 +472,11 @@ namespace AccuX.Host
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 读取失败时留空，由分类逻辑按默认数值处理。
+                // NumberFormat 参与日期识别。读取失败时不能退化为普通数值，
+                // 否则日期序列可能被财务转换写回。
+                throw new HostOperationException("无法读取选区数字格式，请重试。", ex);
             }
 
             return result;
@@ -485,16 +492,46 @@ namespace AccuX.Host
                 {
                     for (var column = 0; column < columnCount; column++)
                     {
-                        result[row, column] = raw[row, column] is bool merged && merged;
+                        // 混合状态在不同宿主中可能以 null/DBNull 或矩阵中的非 bool
+                        // 表示；未知状态一律按“可能包含合并”处理。
+                        if (raw[row, column] is bool merged)
+                        {
+                            result[row, column] = merged;
+                        }
+                        else
+                        {
+                            result[row, column] = true;
+                        }
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 读取失败时按非合并处理。
+                throw new HostOperationException("无法读取选区合并单元格状态，请重试。", ex);
             }
 
             return result;
+        }
+
+        private static bool ContainsTrue(bool[,] matrix)
+        {
+            if (matrix == null)
+            {
+                return true;
+            }
+
+            for (var row = 0; row < matrix.GetLength(0); row++)
+            {
+                for (var column = 0; column < matrix.GetLength(1); column++)
+                {
+                    if (matrix[row, column])
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -631,23 +668,150 @@ namespace AccuX.Host
             }
         }
 
-        private static bool IsDateFormat(string numberFormat)
+        /// <summary>
+        /// 判断 NumberFormat 是否包含日期/时间占位符。
+        /// <para>
+        /// Excel 自定义格式中的方括号可能表示颜色（例如 <c>[Red]</c>）、条件
+        /// （例如 <c>[&gt;=100]</c>）或区域设置（例如 <c>[$-409]</c>），引号、反斜杠、
+        /// 下划线和星号后面的字符也可能只是字面量/填充字符，不能直接按字符搜索。
+        /// </para>
+        /// </summary>
+        internal static bool IsDateFormat(string numberFormat)
         {
             if (string.IsNullOrEmpty(numberFormat))
             {
                 return false;
             }
 
-            // 宿主返回的日期格式会包含 y/m/d/h/s 等占位符；排除纯数字/货币/百分比格式。
-            var lower = numberFormat.ToLowerInvariant();
-            var hasDateToken = lower.IndexOf('y') >= 0
-                || lower.IndexOf('d') >= 0
-                || lower.IndexOf('h') >= 0
-                || lower.IndexOf("mm", StringComparison.Ordinal) >= 0
-                || lower.IndexOf("m/", StringComparison.Ordinal) >= 0
-                || lower.IndexOf("/m", StringComparison.Ordinal) >= 0;
+            for (var index = 0; index < numberFormat.Length; index++)
+            {
+                var current = numberFormat[index];
 
-            return hasDateToken;
+                // 引号中的内容是字面量；Excel 允许用连续双引号表示字面量引号。
+                if (current == '"')
+                {
+                    if (index + 1 < numberFormat.Length && numberFormat[index + 1] == '"')
+                    {
+                        index++;
+                        continue;
+                    }
+
+                    var quoteEnd = numberFormat.IndexOf('"', index + 1);
+                    if (quoteEnd < 0)
+                    {
+                        break;
+                    }
+
+                    index = quoteEnd;
+                    continue;
+                }
+
+                // 反斜杠、下划线和星号分别转义/占用后面的一个字符。
+                if (current == '\\' || current == '_' || current == '*')
+                {
+                    if (index + 1 < numberFormat.Length)
+                    {
+                        index++;
+                    }
+
+                    continue;
+                }
+
+                // 方括号内容优先按控制段处理，避免 [Red] 中的 d 被判为日期。
+                if (current == '[')
+                {
+                    var bracketEnd = numberFormat.IndexOf(']', index + 1);
+                    if (bracketEnd >= 0)
+                    {
+                        var bracketToken = numberFormat.Substring(index + 1, bracketEnd - index - 1);
+                        if (IsElapsedTimeToken(bracketToken))
+                        {
+                            return true;
+                        }
+
+                        index = bracketEnd;
+                        continue;
+                    }
+                }
+
+                var token = char.ToLowerInvariant(current);
+                if (token == 'y' || token == 'd' || token == 'h' || token == 's')
+                {
+                    return true;
+                }
+
+                if (token == 'm')
+                {
+                    var tokenStart = index;
+                    while (index + 1 < numberFormat.Length
+                        && char.ToLowerInvariant(numberFormat[index + 1]) == 'm')
+                    {
+                        index++;
+                    }
+
+                    var tokenLength = index - tokenStart + 1;
+                    if (tokenLength >= 3
+                        || IsStandaloneMonthToken(numberFormat, tokenStart, index)
+                        || HasDateSeparator(numberFormat, tokenStart, index))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsElapsedTimeToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return false;
+            }
+
+            var normalized = token.Trim().ToLowerInvariant();
+            return normalized == "h"
+                || normalized == "hh"
+                || normalized == "m"
+                || normalized == "mm"
+                || normalized == "s"
+                || normalized == "ss";
+        }
+
+        private static bool IsStandaloneMonthToken(string format, int tokenStart, int tokenEnd)
+        {
+            var tokenLength = tokenEnd - tokenStart + 1;
+            if (tokenLength > 2)
+            {
+                return true;
+            }
+
+            for (var index = 0; index < format.Length; index++)
+            {
+                if (index >= tokenStart && index <= tokenEnd)
+                {
+                    index = tokenEnd;
+                    continue;
+                }
+
+                var current = format[index];
+                if (char.IsWhiteSpace(current) || current == ';')
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool HasDateSeparator(string format, int tokenStart, int tokenEnd)
+        {
+            var before = tokenStart > 0 ? format[tokenStart - 1] : '\0';
+            var after = tokenEnd + 1 < format.Length ? format[tokenEnd + 1] : '\0';
+            return before == '/' || before == '-' || before == ':' || before == '.'
+                || after == '/' || after == '-' || after == ':' || after == '.';
         }
 
         // ---------- 公式规范化 ----------

@@ -39,7 +39,8 @@ namespace AccuX.Modules.BasicFinance.AmountConversion
                 return CellTransformOutcome.Skip(cell, SkipReason.NotWritable);
             }
 
-            if (cell.IsFormula)
+            // 只有公式计算结果为数值时才进行金额折合；其他公式类型必须跳过。
+            if (cell.CellType == CellValueType.FormulaNumber)
             {
                 var formula = cell.Formula;
                 if (formula == null || !formula.CanTransform)

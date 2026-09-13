@@ -71,6 +71,24 @@ namespace AccuX.Modules.BasicFinance.Tests
             Assert.Equal(SkipReason.FormulaNotTransformable, outcome.SkipReason);
         }
 
+        [Theory]
+        [InlineData(CellValueType.FormulaText, SkipReason.Text)]
+        [InlineData(CellValueType.FormulaDate, SkipReason.Date)]
+        [InlineData(CellValueType.FormulaBoolean, SkipReason.Boolean)]
+        [InlineData(CellValueType.FormulaError, SkipReason.Error)]
+        public void NonNumericFormulaTypes_AreSkippedByNumericTransforms(
+            CellValueType type,
+            SkipReason expected)
+        {
+            var cell = Cell(type, "formula-result", new FormulaInfo("=A1", FormulaKind.Normal, true));
+
+            AssertSkip(new RoundingTransform(2), cell, expected);
+            AssertSkip(
+                new AmountConversionTransform(new AmountConversionOptions()),
+                cell,
+                expected);
+        }
+
         [Fact]
         public void ChineseAmount_Number_ProducesTextWrite()
         {

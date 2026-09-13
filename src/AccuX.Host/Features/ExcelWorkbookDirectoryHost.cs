@@ -33,7 +33,9 @@ namespace AccuX.Host.Features
         }
 
         /// <summary>
-        /// 在当前工作簿最前面生成目录工作表；replaceExisting 为 true 时先删除同名旧表。
+        /// 在当前工作簿最前面生成目录工作表；replaceExisting 为 true 时先完整生成新表，
+        /// 再替换同名旧表。生成过程失败时尽量恢复原目录；若旧表删除本身失败，
+        /// 则保留新表与旧表备份，避免破坏性清理造成数据丢失。
         /// </summary>
         public int GenerateDirectory(DirectoryOptions options, bool replaceExisting)
         {
@@ -45,13 +47,17 @@ namespace AccuX.Host.Features
             ValidateOptions(options);
 
             Excel.Workbook workbook = null;
+            Excel.Worksheet existingWorksheet = null;
             Excel.Worksheet directoryWorksheet = null;
+            var originalWorksheetName = string.Empty;
+            var existingRenamed = false;
+            var existingDeleteAttempted = false;
             var completed = false;
 
             try
             {
                 workbook = GetActiveWorkbook();
-                var existingWorksheet = FindWorksheet(workbook, options.WorksheetName);
+                existingWorksheet = FindWorksheet(workbook, options.WorksheetName);
                 if (existingWorksheet != null && !replaceExisting)
                 {
                     throw new HostOperationException(
@@ -74,11 +80,9 @@ namespace AccuX.Host.Features
                     DisableDisplayAlerts = true
                 }))
                 {
-                    if (existingWorksheet != null)
-                    {
-                        existingWorksheet.Delete();
-                    }
-
+                    // 先创建并完整写入临时工作表。旧目录在此之前不做任何破坏性修改，
+                    // 即使 COM 写入、样式或超链接失败，也只需删除临时表即可恢复原状。
+                    var stagingName = BuildTemporaryWorksheetName(workbook);
                     var firstSheet = workbook.Sheets[1];
                     directoryWorksheet = workbook.Worksheets.Add(
                         firstSheet,
@@ -91,8 +95,30 @@ namespace AccuX.Host.Features
                         throw new HostOperationException("无法创建“" + options.WorksheetName + "”工作表。");
                     }
 
-                    directoryWorksheet.Name = options.WorksheetName;
+                    directoryWorksheet.Name = stagingName;
                     WriteDirectoryContents(directoryWorksheet, title, visibleWorksheetNames, options);
+
+                    if (existingWorksheet != null)
+                    {
+                        originalWorksheetName = SafeWorksheetName(existingWorksheet);
+                        var backupName = BuildTemporaryWorksheetName(workbook);
+
+                        // 改名而非立即删除，确保在新目录准备完成后仍有可恢复的旧表。
+                        existingRenamed = true;
+                        existingWorksheet.Name = backupName;
+                    }
+
+                    // 旧目录已改名或不存在，此时临时表可以安全取得正式名称。
+                    directoryWorksheet.Name = options.WorksheetName;
+
+                    if (existingWorksheet != null)
+                    {
+                        // 删除动作放在所有新内容写入成功之后。删除失败时不清理任何一份
+                        // 已完成的数据，保留“新目录 + 旧目录备份”供用户恢复。
+                        existingDeleteAttempted = true;
+                        existingWorksheet.Delete();
+                    }
+
                     completed = true;
                 }
 
@@ -100,18 +126,26 @@ namespace AccuX.Host.Features
             }
             catch (HostOperationException)
             {
-                if (!completed)
+                if (!completed && !existingDeleteAttempted)
                 {
                     TryDeleteWorksheet(directoryWorksheet);
+                    if (existingRenamed)
+                    {
+                        TryRenameWorksheet(existingWorksheet, originalWorksheetName);
+                    }
                 }
 
                 throw;
             }
             catch (Exception ex)
             {
-                if (!completed)
+                if (!completed && !existingDeleteAttempted)
                 {
                     TryDeleteWorksheet(directoryWorksheet);
+                    if (existingRenamed)
+                    {
+                        TryRenameWorksheet(existingWorksheet, originalWorksheetName);
+                    }
                 }
 
                 throw new HostOperationException("生成目录失败：" + ex.Message, ex);
@@ -125,11 +159,61 @@ namespace AccuX.Host.Features
                 throw new HostOperationException("目录工作表名称不能为空。");
             }
 
+            if (options.WorksheetName.Length > 31
+                || options.WorksheetName.IndexOfAny(new[] { ':', '\\', '/', '?', '*', '[', ']' }) >= 0)
+            {
+                throw new HostOperationException("目录工作表名称不符合 Excel/WPS 命名规则。");
+            }
+
             if (options.Headers == null || options.Headers.Length != ColumnCount
                 || options.ColumnWidths == null || options.ColumnWidths.Length != ColumnCount)
             {
                 throw new HostOperationException("目录模板必须提供 " + ColumnCount + " 列的表头与列宽。");
             }
+
+            for (var i = 0; i < options.ColumnWidths.Length; i++)
+            {
+                if (double.IsNaN(options.ColumnWidths[i])
+                    || double.IsInfinity(options.ColumnWidths[i])
+                    || options.ColumnWidths[i] <= 0d)
+                {
+                    throw new HostOperationException("目录列宽必须是大于 0 的有效数字。");
+                }
+            }
+
+            if (options.TitleRowHeight <= 0d || options.HeaderRowHeight <= 0d || options.BodyRowHeight <= 0d
+                || options.TitleFontSize <= 0 || options.HeaderFontSize <= 0)
+            {
+                throw new HostOperationException("目录行高和字号必须是大于 0 的有效数字。");
+            }
+
+            // 在任何工作表改名、创建或删除之前验证全部颜色，避免参数错误触发破坏性替换。
+            ExcelComHelper.ParseOleColor(options.TitleBackgroundColor);
+            ExcelComHelper.ParseOleColor(options.HeaderBackgroundColor);
+            ExcelComHelper.ParseOleColor(options.AlternateRowColor);
+            ExcelComHelper.ParseOleColor(options.BorderColor);
+            ExcelComHelper.ParseOleColor(options.TitleTextColor);
+            ExcelComHelper.ParseOleColor(options.BodyTextColor);
+            ExcelComHelper.ParseOleColor(options.HyperlinkColor);
+        }
+
+        private static string BuildTemporaryWorksheetName(Excel.Workbook workbook)
+        {
+            const string prefix = "__AccuX_";
+            const int maxWorksheetNameLength = 31;
+            var suffixLength = maxWorksheetNameLength - prefix.Length;
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var suffix = Guid.NewGuid().ToString("N").Substring(0, suffixLength);
+                var candidate = prefix + suffix;
+                if (FindWorksheet(workbook, candidate) == null)
+                {
+                    return candidate;
+                }
+            }
+
+            throw new HostOperationException("无法为目录生成临时工作表名称。");
         }
 
         private static Excel.Worksheet FindWorksheet(Excel.Workbook workbook, string worksheetName)
@@ -322,6 +406,23 @@ namespace AccuX.Host.Features
             catch
             {
                 // 生成失败时的清理也不能掩盖原始异常。
+            }
+        }
+
+        private static void TryRenameWorksheet(Excel.Worksheet worksheet, string name)
+        {
+            if (worksheet == null || string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            try
+            {
+                worksheet.Name = name;
+            }
+            catch
+            {
+                // 回滚阶段不能掩盖原始异常；调用方仍保留临时表以避免数据丢失。
             }
         }
     }

@@ -80,6 +80,26 @@ namespace AccuX.Core.Operations
 
             try
             {
+                if (target == null)
+                {
+                    throw new ArgumentException("操作目标不能为空。", nameof(context));
+                }
+
+                // V1 不对合并区域执行批量写回。Host 在捕获和重新校验阶段都会
+                // 设置该标志；Pipeline 再做一次纯 CLR 层拦截，避免其他 Host
+                // 实现忘记处理时仍然修改合并单元格。
+                if (target.ContainsMergedCells)
+                {
+                    stopwatch.Stop();
+                    return new OperationResult(target, stats)
+                    {
+                        Success = false,
+                        Duration = stopwatch.Elapsed,
+                        Message = "选区包含合并单元格，当前操作不支持。",
+                        Issues = new[] { "选区包含合并单元格，当前操作不支持。" }
+                    };
+                }
+
                 // 1. 批量读取（唯一一次读取，之后不再依赖当前 Selection）。
                 var readResult = _host.Read(target);
                 stats.TotalCells = readResult.Cells.Count;

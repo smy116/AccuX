@@ -69,7 +69,7 @@ namespace AccuX.Host.Features
 
             return new CellCommentTarget(
                 BuildWorkbookKey(workbook),
-                SafeWorksheetName(worksheet),
+                BuildWorksheetKey(worksheet),
                 SafeWorksheetName(worksheet),
                 address,
                 SafeCellRow(bestCell),
@@ -108,10 +108,38 @@ namespace AccuX.Host.Features
             var range = ResolveCommentRangeOrThrow(target, true);
             try
             {
-                // 保存始终按“覆盖”处理：清除目标单元格的旧备注后直接创建新备注。
-                // ClearComments 在没有旧备注时是无操作，因此无需先读取/判断 Comment 是否存在。
+                // 保存始终按“覆盖”处理，但必须先保存旧文本：ClearComments 成功而
+                // AddComment 失败时，不能让一次保存错误顺带丢失原批注。
+                var oldComment = range.Comment;
+                var oldText = oldComment == null
+                    ? string.Empty
+                    : oldComment.Text(Type.Missing, Type.Missing, Type.Missing) ?? string.Empty;
+
                 range.ClearComments();
-                range.AddComment(text);
+                try
+                {
+                    range.AddComment(text);
+                }
+                catch (Exception addException)
+                {
+                    try
+                    {
+                        // 先清理可能已部分创建的备注，再恢复原文本。
+                        range.ClearComments();
+                        if (oldComment != null)
+                        {
+                            range.AddComment(oldText);
+                        }
+                    }
+                    catch (Exception restoreException)
+                    {
+                        throw new HostOperationException(
+                            "保存单元格批注失败，且原批注恢复失败。请立即检查目标单元格。",
+                            new AggregateException(addException, restoreException));
+                    }
+
+                    throw;
+                }
             }
             catch (Exception ex)
             {
@@ -171,7 +199,17 @@ namespace AccuX.Host.Features
             {
                 foreach (Excel.Worksheet candidate in workbook.Worksheets)
                 {
-                    if (string.Equals(SafeWorksheetName(candidate), target.WorksheetKey, StringComparison.OrdinalIgnoreCase))
+                    var stableKeyMatches = string.Equals(
+                        BuildWorksheetKey(candidate),
+                        target.WorksheetKey,
+                        StringComparison.OrdinalIgnoreCase);
+                    var legacyNameMatches = target.WorksheetKey.IndexOf('|') < 0
+                        && string.Equals(
+                            SafeWorksheetName(candidate),
+                            target.WorksheetKey,
+                            StringComparison.OrdinalIgnoreCase);
+
+                    if (stableKeyMatches || legacyNameMatches)
                     {
                         worksheet = candidate;
                         break;

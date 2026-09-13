@@ -41,8 +41,11 @@ namespace AccuX.Modules.BasicFinance.Rounding
                 return CellTransformOutcome.Skip(cell, SkipReason.NotWritable);
             }
 
-            // 公式单元格：保持公式属性，包裹 ROUND。
-            if (cell.IsFormula)
+            // 只有“公式计算结果为数值”时才允许包裹 ROUND。
+            // FormulaText / FormulaDate / FormulaBoolean / FormulaError 虽然也带有
+            // FormulaInfo，但按业务规则必须跳过，不能把字符串、日期或错误值
+            // 当作数值公式改写。
+            if (cell.CellType == CellValueType.FormulaNumber)
             {
                 var formula = cell.Formula;
                 if (formula == null || !formula.CanTransform)

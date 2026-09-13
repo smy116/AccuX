@@ -132,6 +132,28 @@ namespace AccuX.Core.Tests
         }
 
         [Fact]
+        public void Execute_MergedTarget_FailsBeforeReadingOrWriting()
+        {
+            var host = new RecordingHost(new List<CellData>
+            {
+                TestData.Cell(0, 0, CellValueType.ConstantNumber, 1m)
+            });
+
+            var pipeline = new RangeOperationPipeline(host, NullLogger.Instance);
+            var context = new OperationContext(
+                "cmd",
+                "mod",
+                new RangeTarget("book", "sheet", "Sheet1", "A1", 1, 1, 1, false, true));
+
+            var result = pipeline.Execute(new PassthroughTransform(), context, new HostStateOptions());
+
+            Assert.False(result.Success);
+            Assert.Contains("合并单元格", result.Message);
+            Assert.Equal(0, host.ReadCalls);
+            Assert.False(host.Wrote);
+        }
+
+        [Fact]
         public void Execute_TransformThrows_ReturnsFailureWithoutWriting()
         {
             var host = new RecordingHost(new List<CellData>
