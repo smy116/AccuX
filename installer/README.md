@@ -1,12 +1,32 @@
 # 安装脚本验证
 
-使用 Inno Setup 6.7.3 编译验证：
+`Build-Installer.ps1` 是本地和 GitHub Actions 共用的唯一安装包生成入口，使用 Inno Setup 6.7.3：
 
 ```powershell
-& 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer\AccuX.iss
+pwsh -NoProfile -File .\installer\Build-Installer.ps1 `
+  -Version 1.7.1 `
+  -FileVersion 1.7.1.0
+
+pwsh -NoProfile -File .\installer\Build-Installer.ps1 `
+  -Version 1.7.1-ci.37.d202798 `
+  -FileVersion 1.7.1.37
 ```
 
-正式版本使用两段版本号，例如 `v1.4`。CI 会把 tag 转换为 `1.4`，并通过 Inno 预处理参数生成 `AccuXSetup-1.4.exe`；程序集和安装器文件版本使用 `1.4.0.0`。
+脚本会调用 `installer\AccuX.iss`，检查生成物的 MZ/PE 头和版本资源，并生成安装包、`.sha256` 校验文件和 `.manifest.json` 清单。清单记录显示/安装器/文件版本、提交 SHA、运行号、文件名、大小和哈希；`OutputDirectory` 和 `OutputBaseFilename` 可用于 CI 或隔离测试输出。
+
+版本字段分工如下：
+
+| 字段 | 正式版 | 预发布版 | 用途 |
+| --- | --- | --- | --- |
+| 显示版本 | `1.7.1` | `1.7.1-ci.37.d202798` | 安装向导、文件版本文本、清单 |
+| 安装器数字版本 | `1.7.1` | `1.7.1` | Inno `AppVersion`，用于升级比较 |
+| 文件版本 | `1.7.1.0` | `1.7.1.37` | PE 固定 `FileVersion` / `ProductVersion` |
+
+预发布后缀不会进入 Windows 的固定数字版本字段；这避免部分系统无法双击启动预发布安装包。正式包名称仍为 `AccuXSetup-<版本>.exe`，测试包名称保留 `ci` 和短 SHA。
+
+GitHub Actions 使用 `actions/upload-artifact@v7` 的 `archive: false` 分别上传 EXE、`.sha256` 和 manifest，因此 Actions Artifact 列表会直接显示可双击的 `.exe`，不再需要从 ZIP 中取出安装包。Release job 使用 `actions/download-artifact@v8` 下载并重新校验这些原始文件。
+
+Windows 10/11 下载文件可能带有 Mark-of-the-Web；由于当前没有代码签名证书，附件管理器或 SmartScreen 仍可能显示阻止或安全提示。请按系统提示检查来源后运行。
 
 ## 前置条件
 

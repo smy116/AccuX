@@ -21,9 +21,13 @@ jobs:
     runs-on: windows-2022
     outputs:
       version: ${{ steps.version.outputs.version }}
+      installer_version: ${{ steps.version.outputs.installer_version }}
       assembly_version: ${{ steps.version.outputs.assembly_version }}
       file_version: ${{ steps.version.outputs.file_version }}
       output_base_filename: ${{ steps.version.outputs.output_base_filename }}
+      setup_filename: ${{ steps.version.outputs.setup_filename }}
+      checksum_filename: ${{ steps.version.outputs.checksum_filename }}
+      manifest_filename: ${{ steps.version.outputs.manifest_filename }}
       is_release: ${{ steps.version.outputs.is_release }}
     steps:
       - name: Checkout
@@ -88,6 +92,7 @@ jobs:
 
             $assemblyVersion = Get-FourPartVersion -Value $version
             $fileVersion = $assemblyVersion
+            $installerVersion = $version
             $outputBaseFilename = "AccuXSetup-$version"
             $isRelease = 'true'
           }
@@ -115,16 +120,21 @@ jobs:
             # 避免开发中途改变 CLR 绑定标识。
             $assemblyVersion = if ($latest) { "$major.$minor.$($latest.Patch).0" } else { '0.0.0.0' }
             $fileVersion = "$major.$minor.$nextPatch.$($env:RUN_NUMBER)"
+            $installerVersion = $baseVersion
             $outputBaseFilename = "AccuXSetup-$version"
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
+          "installer_version=$installerVersion" >> $env:GITHUB_OUTPUT
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
           "file_version=$fileVersion" >> $env:GITHUB_OUTPUT
           "output_base_filename=$outputBaseFilename" >> $env:GITHUB_OUTPUT
+          "setup_filename=$outputBaseFilename.exe" >> $env:GITHUB_OUTPUT
+          "checksum_filename=$outputBaseFilename.exe.sha256" >> $env:GITHUB_OUTPUT
+          "manifest_filename=$outputBaseFilename.exe.manifest.json" >> $env:GITHUB_OUTPUT
           "is_release=$isRelease" >> $env:GITHUB_OUTPUT
 
-          Write-Host "版本：$version；程序集版本：$assemblyVersion；文件版本：$fileVersion；Release：$isRelease"
+          Write-Host "显示版本：$version；安装器版本：$installerVersion；程序集版本：$assemblyVersion；文件版本：$fileVersion；Release：$isRelease"
 
   build:
     name: Build installer
@@ -240,39 +250,43 @@ jobs:
       - name: Compile installer
         shell: pwsh
         env:
-          ACCUX_VERSION: ${{ needs.prepare.outputs.version }}
-          ACCUX_FILE_VERSION: ${{ needs.prepare.outputs.file_version }}
-          ACCUX_OUTPUT_BASE: ${{ needs.prepare.outputs.output_base_filename }}
+          ACCUX_ARTIFACT_DIRECTORY: ${{ runner.temp }}\accux-artifacts
         run: |
           $ErrorActionPreference = 'Stop'
-          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'accux-artifacts'
-          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
-          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'installer\AccuX.iss'
+          New-Item -ItemType Directory -Path $env:ACCUX_ARTIFACT_DIRECTORY -Force | Out-Null
+          & ./installer/Build-Installer.ps1 `
+            -Iscc $env:ISCC `
+            -Version '${{ needs.prepare.outputs.version }}' `
+            -InstallerVersion '${{ needs.prepare.outputs.installer_version }}' `
+            -FileVersion '${{ needs.prepare.outputs.file_version }}' `
+            -OutputDirectory $env:ACCUX_ARTIFACT_DIRECTORY `
+            -OutputBaseFilename '${{ needs.prepare.outputs.output_base_filename }}' `
+            -CommitSha '${{ github.sha }}' `
+            -RunNumber '${{ github.run_number }}'
+          if ($LASTEXITCODE -ne 0) { throw '统一安装包构建脚本执行失败。' }
 
-          & $env:ISCC `
-            "/DAccuXVersion=$env:ACCUX_VERSION" `
-            "/DAccuXFileVersion=$env:ACCUX_FILE_VERSION" `
-            "/DAccuXOutputBaseFilename=$env:ACCUX_OUTPUT_BASE" `
-            "/O$artifactDirectory" `
-            $scriptPath
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 编译失败。' }
-
-          $setupPath = Join-Path $artifactDirectory "$env:ACCUX_OUTPUT_BASE.exe"
-          if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
-            throw "未生成安装包：$setupPath"
-          }
-
-          $hash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash *$([IO.Path]::GetFileName($setupPath))" | Set-Content -LiteralPath "$setupPath.sha256" -Encoding ascii
-          Write-Host "安装包：$setupPath"
-          Write-Host "SHA-256：$hash"
-
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload installer executable artifact
+        uses: actions/upload-artifact@v7
         with:
-          name: AccuX-installer-${{ github.run_id }}
-          path: ${{ runner.temp }}\accux-artifacts\*
+          path: ${{ runner.temp }}\accux-artifacts\${{ needs.prepare.outputs.setup_filename }}
           if-no-files-found: error
+          archive: false
+          retention-days: 30
+
+      - name: Upload installer checksum artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}\accux-artifacts\${{ needs.prepare.outputs.checksum_filename }}
+          if-no-files-found: error
+          archive: false
+          retention-days: 30
+
+      - name: Upload installer manifest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}\accux-artifacts\${{ needs.prepare.outputs.manifest_filename }}
+          if-no-files-found: error
+          archive: false
           retention-days: 30
 
       - name: Upload diagnostic logs on failure
@@ -300,11 +314,99 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download installer artifact
-        uses: actions/download-artifact@v4
+      - name: Download installer executable artifact
+        uses: actions/download-artifact@v8
         with:
-          name: AccuX-installer-${{ github.run_id }}
+          name: ${{ needs.prepare.outputs.setup_filename }}
           path: release-assets
+
+      - name: Download installer checksum artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.prepare.outputs.checksum_filename }}
+          path: release-assets
+
+      - name: Download installer manifest artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.prepare.outputs.manifest_filename }}
+          path: release-assets
+
+      - name: Validate downloaded installer assets
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.version }}
+          EXPECTED_FILE_VERSION: ${{ needs.prepare.outputs.file_version }}
+          EXPECTED_INSTALLER_VERSION: ${{ needs.prepare.outputs.installer_version }}
+          EXPECTED_SETUP_FILENAME: ${{ needs.prepare.outputs.setup_filename }}
+          EXPECTED_CHECKSUM_FILENAME: ${{ needs.prepare.outputs.checksum_filename }}
+          EXPECTED_MANIFEST_FILENAME: ${{ needs.prepare.outputs.manifest_filename }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_RUN_ID: ${{ github.run_number }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setupPath = Join-Path 'release-assets' $env:EXPECTED_SETUP_FILENAME
+          $checksumPath = Join-Path 'release-assets' $env:EXPECTED_CHECKSUM_FILENAME
+          $manifestPath = Join-Path 'release-assets' $env:EXPECTED_MANIFEST_FILENAME
+          foreach ($path in @($setupPath, $checksumPath, $manifestPath)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Release 附件缺失：$path"
+            }
+          }
+
+          $bytes = [IO.File]::ReadAllBytes($setupPath)
+          if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+            throw 'Release 安装包不是有效的 MZ 文件。'
+          }
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ($peOffset -lt 0 -or $peOffset + 4 -gt $bytes.Length -or
+              $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+              $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
+            throw 'Release 安装包不是有效的 PE 文件。'
+          }
+
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($setupPath)
+          $fixedFileVersion = "$($info.FileMajorPart).$($info.FileMinorPart).$($info.FileBuildPart).$($info.FilePrivatePart)"
+          $fixedProductVersion = "$($info.ProductMajorPart).$($info.ProductMinorPart).$($info.ProductBuildPart).$($info.ProductPrivatePart)"
+          if ($fixedFileVersion -ne $env:EXPECTED_FILE_VERSION -or $fixedProductVersion -ne $env:EXPECTED_FILE_VERSION) {
+            throw "Release 安装包版本资源不一致：File=$fixedFileVersion，Product=$fixedProductVersion。"
+          }
+          if ($info.FileVersion.Trim() -ne $env:EXPECTED_VERSION -or $info.ProductVersion.Trim() -ne $env:EXPECTED_VERSION) {
+            throw 'Release 安装包文本版本资源不一致。'
+          }
+
+          $checksumLine = [IO.File]::ReadAllText($checksumPath).Trim()
+          if ($checksumLine -notmatch '^([0-9a-fA-F]{64}) \*(.+)$') {
+            throw "校验文件格式错误：$checksumPath"
+          }
+          $expectedHash = $Matches[1].ToLowerInvariant()
+          $checksumFileName = $Matches[2]
+          $actualHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expectedHash -ne $actualHash -or $checksumFileName -ne $env:EXPECTED_SETUP_FILENAME) {
+            throw "Release 安装包 SHA-256 校验失败：期望 $expectedHash，实际 $actualHash。"
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $checks = @{
+            version = $env:EXPECTED_VERSION
+            displayVersion = $env:EXPECTED_VERSION
+            installerVersion = $env:EXPECTED_INSTALLER_VERSION
+            fileVersion = $env:EXPECTED_FILE_VERSION
+            fileName = $env:EXPECTED_SETUP_FILENAME
+            sha256 = $actualHash
+            commitSha = $env:EXPECTED_COMMIT_SHA
+            runNumber = $env:EXPECTED_RUN_ID
+            runId = $env:EXPECTED_RUN_ID
+          }
+          foreach ($property in $checks.Keys) {
+            if ([string]$manifest.$property -ne [string]$checks[$property]) {
+              throw "manifest 字段 $property 不一致：实际 '$($manifest.$property)'。"
+            }
+          }
+          if ([int64]$manifest.sizeBytes -ne (Get-Item -LiteralPath $setupPath).Length) {
+            throw 'manifest sizeBytes 与下载的安装包大小不一致。'
+          }
+          Write-Host "Release 附件校验通过：$env:EXPECTED_SETUP_FILENAME（$actualHash）" -ForegroundColor Green
 
       - name: Reject version rollback
         shell: pwsh

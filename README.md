@@ -186,7 +186,7 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 插件运行时从 GitHub Releases API 读取最新稳定版本：`https://api.github.com/repos/smy116/AccuX/releases/latest`。如果 GitHub 直连失败，会自动重试 `gh-proxy.com` 代理地址（完整 URL 前置 `https://gh-proxy.com/`）。API 返回 Release 元数据及 `AccuXSetup-{version}.exe` 的 `browser_download_url`；客户端只打开该 HTTPS 地址，不在本地下载、校验或启动安装程序；通过代理取得的 Release 会同时使用代理下载和说明地址。GitHub 及代理均不可用、响应无效或 Release 缺少安装包时，升级检测静默失败，不影响插件正常使用。
 
-GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-{version}.exe.sha256`。客户端不自动执行 SHA-256 校验，用户可在需要时手动核验。
+GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-{version}.exe.sha256`，并附带构建 manifest。客户端不自动执行 SHA-256 校验，用户可在需要时手动核验。
 
 ## 日志
 
@@ -225,24 +225,24 @@ GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-
 
 ## 安装包（正式发布）
 
-使用 Inno Setup 6.7.3 编译 `installer/AccuX.iss`。先构建 Release 程序集，再执行安装器回归检查：
+使用 Inno Setup 6.7.3 编译安装包。先构建 Release 程序集，再执行安装器回归检查；本地和 CI 共用 `installer/Build-Installer.ps1`：
 
 ```
 powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.6.1
 pwsh -NoProfile -File installer\Test-Installer.ps1
-ISCC.exe /DAccuXVersion=1.6.1 /DAccuXFileVersion=1.6.1.0 installer\AccuX.iss
+pwsh -NoProfile -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 1.6.1.0
 ```
 
-脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。安装包名为 `AccuXSetup-{版本}.exe`，版本参数由 CI 从 tag 传入，无需修改安装脚本。
+构建脚本负责调用 Inno Setup、校验 MZ/PE 头和版本资源，并生成 `.sha256` 与 `.manifest.json`。安装包名为 `AccuXSetup-{显示版本}.exe`，版本参数由 CI 从 tag 或分支构建号传入，无需修改安装脚本。
 
 ## 版本号管理
 
 版本号的唯一来源是 Git tag，任何地方都不再维护“当前版本”常量。
 
-| 场景 | 触发 | 用户可见版本 | 程序集版本 | 文件版本 | 安装包名 |
-| --- | --- | --- | --- | --- | --- |
-| 正式版 | tag `v1.6.1` | `1.6.1` | `1.6.1.0` | `1.6.1.0` | `AccuXSetup-1.6.1.exe` |
-| 测试版 | 分支推送 / 手动触发 | `1.6.2-ci.37.d202798` | 最近正式版 | `1.6.2.37` | `AccuXSetup-1.6.2-ci.37.d202798.exe` |
+| 场景 | 触发 | 显示版本 | 安装器数字版本 | 程序集版本 | 文件版本 | 安装包名 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 正式版 | tag `v1.6.1` | `1.6.1` | `1.6.1` | `1.6.1.0` | `1.6.1.0` | `AccuXSetup-1.6.1.exe` |
+| 测试版 | 分支推送 / 手动触发 | `1.6.2-ci.37.d202798` | `1.6.2` | 最近正式版 | `1.6.2.37` | `AccuXSetup-1.6.2-ci.37.d202798.exe` |
 
 约定：
 
@@ -251,11 +251,14 @@ ISCC.exe /DAccuXVersion=1.6.1 /DAccuXFileVersion=1.6.1.0 installer\AccuX.iss
 - CI 测试版基于仓库中最新正式 tag 递增一个修订号，并以 `-ci.<运行号>.<短SHA>` 标识；不带后缀的版本才是正式版。
 - **程序集版本只在正式发布时前移**，测试版沿用最近正式版，避免开发中途改变 CLR 绑定标识。
 - **文件版本每次构建都不同**（测试版第四段用运行号），用于区分同一版本的多次构建。
+- **安装器数字版本与显示版本分离**：`AppVersion` 只使用纯数字版本；预发布后缀只进入安装向导和 PE 文本版本字段。固定 `FileVersion` / `ProductVersion` 始终是四段数字。
 - 比较按 SemVer：`1.6 == 1.6.0`，同一数字版本下预发布小于正式版，因此装了 `1.6.1` 测试版的用户会在正式版 `1.6.1` 发布后收到升级提示。
 
 ## GitHub Actions 自动构建与发布
 
 `.github/workflows/build-release.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
+
+构建阶段通过 `actions/upload-artifact@v7` 的 `archive: false` 分别上传 EXE、SHA-256 校验文件和 manifest；Actions Artifact 列表直接提供 `.exe`，不再只有包含 EXE 的 ZIP。Release job 使用 `actions/download-artifact@v8` 下载原始文件，并在上传附件前重新校验 PE 头、版本资源、manifest 和 SHA-256。Windows 10/11 下载的文件仍可能带有 Mark-of-the-Web；由于暂未配置代码签名，系统可能显示阻止或安全提示。
 
 只有合法版本 tag 才会创建正式 GitHub Release：
 

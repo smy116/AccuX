@@ -1,7 +1,7 @@
 ; AccuX V1 安装脚本（规格 §26 安装与部署约定）
 ;
-; 编译：ISCC.exe /DAccuXVersion=1.6.1 /DAccuXFileVersion=1.6.1.0 installer\AccuX.iss
-; 产物：AccuXSetup-{AccuXVersion}.exe
+; 编译：pwsh -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 1.6.1.0
+; 产物：AccuXSetup-{AccuXDisplayVersion}.exe
 ;
 ; 要求：
 ;   - 检查 .NET Framework 4.8 前置条件；缺失时自动下载并安装；
@@ -16,17 +16,21 @@
 ;     installer\Languages\ 下；升级 Inno Setup 后请同步更新该文件。
 ;   - Add-in 程序集为 AnyCPU（MSIL），同一份 DLL 由 32 位与 64 位 Office 共用，
 ;     因此注册表项需要同时写入 32 位与 64 位视图。
-;   - 版本号唯一来源是 tag / CI 参数，编译时必须通过 /D 传入；默认值只是
+;   - 版本号唯一来源是 tag / CI 参数，编译时必须通过 /DAccuXDisplayVersion、
+;     /DAccuXInstallerVersion 和 /DAccuXFileVersion 传入；默认值只是
 ;     开发占位，避免未指定版本时误产出看似正式版的安装包。
 
-#ifndef AccuXVersion
-#define AccuXVersion "0.0.0-dev"
+#ifndef AccuXDisplayVersion
+#define AccuXDisplayVersion "0.0.0-dev"
+#endif
+#ifndef AccuXInstallerVersion
+#define AccuXInstallerVersion "0.0.0"
 #endif
 #ifndef AccuXFileVersion
 #define AccuXFileVersion "0.0.0.0"
 #endif
 #ifndef AccuXOutputBaseFilename
-#define AccuXOutputBaseFilename "AccuXSetup-" + AccuXVersion
+#define AccuXOutputBaseFilename "AccuXSetup-" + AccuXDisplayVersion
 #endif
 #define AccuXProgId "AccuX.AddIn.Connect"
 #define AccuXFriendlyName "AccuX"
@@ -39,9 +43,12 @@
 [Setup]
 AppId={{8E3B2A64-1C7D-4A9F-9E5B-2D6F0A8C4B31}
 AppName=AccuX
-AppVersion={#AccuXVersion}
-AppVerName=AccuX {#AccuXVersion}
+AppVersion={#AccuXInstallerVersion}
+AppVerName=AccuX {#AccuXDisplayVersion}
 VersionInfoVersion={#AccuXFileVersion}
+VersionInfoProductVersion={#AccuXFileVersion}
+VersionInfoTextVersion={#AccuXDisplayVersion}
+VersionInfoProductTextVersion={#AccuXDisplayVersion}
 AppPublisher=AccuX
 DefaultDirName={autopf}\AccuX
 DefaultGroupName=AccuX
