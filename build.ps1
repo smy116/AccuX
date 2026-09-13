@@ -2,11 +2,18 @@
 #
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File build.ps1
-#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.6.1
+#
+# -Version 是面向用户的语义版本（例如 1.6、1.6.1、1.6.2-ci.37.d202798）。
+# -AssemblyVersion / -FileVersion 是 CLR 需要的四段数字版本，省略时由
+# -Version 推导（1.6.1 -> 1.6.1.0）；CI 会显式传入，以便让测试版的
+# FileVersion 每次构建递增、而 AssemblyVersion 只在正式发布时前移。
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
-    [string]$Version = '1.4',
+    [string]$Version = '0.0.0-dev',
+    [string]$AssemblyVersion = '',
+    [string]$FileVersion = '',
     [string]$OfficePiaPath = '',
     [switch]$SkipTests
 )
@@ -15,20 +22,48 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $solution = Join-Path $repoRoot 'AccuX.sln'
 
-function Assert-TwoPartVersion {
+function Assert-VersionSegment {
     param([Parameter(Mandatory)][string]$Value)
 
-    if ($Value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-        throw "版本必须是两段数字且不能有前导零，例如 1.1；实际值：$Value"
-    }
-
-    $parts = $Value.Split('.')
-    foreach ($part in $parts) {
-        $number = [int64]$part
-        if ($number -gt 65534) {
+    foreach ($part in $Value.Split('.')) {
+        if ([int64]$part -gt 65534) {
             throw "版本段必须在 0 到 65534 之间：$Value"
         }
     }
+}
+
+# 语义版本：可选的 -预发布 后缀，例如 1.6、1.6.1、1.6.2-ci.37.d202798。
+function Assert-SemanticVersion {
+    param([Parameter(Mandatory)][string]$Value)
+
+    if ($Value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?(?:-[0-9A-Za-z][0-9A-Za-z.\-]*)?$') {
+        throw "版本必须是两段或三段数字，可带 -预发布 后缀且不能有前导零，例如 1.6 或 1.6.1；实际值：$Value"
+    }
+
+    $numeric = $Value.Split('-')[0]
+    Assert-VersionSegment -Value $numeric
+}
+
+# CLR 四段数字版本，例如 1.6.1.0。
+function Assert-FourPartVersion {
+    param(
+        [Parameter(Mandatory)][string]$Value,
+        [Parameter(Mandatory)][string]$Name)
+
+    if ($Value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+        throw "$Name 必须是四段数字且不能有前导零，例如 1.6.1.0；实际值：$Value"
+    }
+
+    Assert-VersionSegment -Value $Value
+}
+
+# 把语义版本的数字部分补成四段：1.6 -> 1.6.0.0，1.6.1 -> 1.6.1.0。
+function ConvertTo-FourPartVersion {
+    param([Parameter(Mandatory)][string]$Value)
+
+    $numeric = $Value.Split('-')[0].Split('.')
+    $patch = if ($numeric.Length -ge 3) { $numeric[2] } else { '0' }
+    return "$($numeric[0]).$($numeric[1]).$patch.0"
 }
 
 function Get-PiaAssemblyVersion {
@@ -98,21 +133,24 @@ function Resolve-OfficePia {
     return $null
 }
 
-Assert-TwoPartVersion -Value $Version
-$versionParts = $Version.Split('.')
-$assemblyVersion = "$($versionParts[0]).$($versionParts[1]).0.0"
+Assert-SemanticVersion -Value $Version
+if (-not $AssemblyVersion) { $AssemblyVersion = ConvertTo-FourPartVersion -Value $Version }
+if (-not $FileVersion) { $FileVersion = ConvertTo-FourPartVersion -Value $Version }
+Assert-FourPartVersion -Value $AssemblyVersion -Name 'AssemblyVersion'
+Assert-FourPartVersion -Value $FileVersion -Name 'FileVersion'
+
 $resolvedOfficePiaPath = Resolve-OfficePia -ExplicitPath $OfficePiaPath
 $msbuildProperties = @(
     "-p:Version=$Version",
     "-p:AccuXVersion=$Version",
-    "-p:AssemblyVersion=$assemblyVersion",
-    "-p:FileVersion=$assemblyVersion"
+    "-p:AssemblyVersion=$AssemblyVersion",
+    "-p:FileVersion=$FileVersion"
 )
 if ($resolvedOfficePiaPath) {
     $msbuildProperties += "-p:OfficePiaPath=$resolvedOfficePiaPath"
 }
 
-Write-Host "== 版本：$Version（程序集 $assemblyVersion）==" -ForegroundColor Cyan
+Write-Host "== 版本：$Version（程序集 $AssemblyVersion，文件 $FileVersion）==" -ForegroundColor Cyan
 if ($resolvedOfficePiaPath) {
     Write-Host "== Office PIA：$resolvedOfficePiaPath ==" -ForegroundColor Cyan
 }

@@ -158,7 +158,8 @@ namespace AccuX.AddIn.Tests
 
         [Theory]
         [InlineData("v1.4-beta")]
-        [InlineData("v1.4.1")]
+        [InlineData("v1.4.1.2")]
+        [InlineData("v01.4")]
         public async Task CheckLatest_RejectsUnsupportedOrMismatchedTag(string tag)
         {
             var client = CreateClient(_ => JsonResponse(ReleaseJson("1.4", tag)));
@@ -167,6 +168,43 @@ namespace AccuX.AddIn.Tests
             var result = await service.CheckLatestAsync("1.3", CancellationToken.None);
 
             Assert.False(result.IsSuccessful);
+        }
+
+        [Fact]
+        public async Task CheckLatest_AcceptsThreePartReleaseTag()
+        {
+            var client = CreateClient(_ => JsonResponse(ReleaseJson("1.6.1")));
+            var service = new GitHubReleaseService(NullLogger.Instance, client);
+
+            var result = await service.CheckLatestAsync("1.6", CancellationToken.None);
+
+            Assert.True(result.IsSuccessful);
+            Assert.True(result.HasUpdate);
+            Assert.Equal("1.6.1", result.LatestRelease.Version.Text);
+            Assert.Equal(
+                "https://github.com/smy116/AccuX/releases/download/v1.6.1/AccuXSetup-1.6.1.exe",
+                result.LatestRelease.InstallerUrl);
+        }
+
+        [Theory]
+        [InlineData("1.6.1-ci.37.d202798", "1.6", false)]
+        [InlineData("1.6.1-ci.37.d202798", "1.6.1", true)]
+        [InlineData("1.6.1-ci.37.d202798", "1.6.2", true)]
+        [InlineData("1.6+abc1234", "1.6", false)]
+        public async Task CheckLatest_AppliesSemVerPrereleaseOrdering(
+            string currentVersion,
+            string releaseVersion,
+            bool expectedUpdate)
+        {
+            var client = CreateClient(_ => JsonResponse(ReleaseJson(releaseVersion)));
+            var service = new GitHubReleaseService(NullLogger.Instance, client);
+
+            var result = await service.CheckLatestAsync(currentVersion, CancellationToken.None);
+
+            // 装了 1.6.1 测试版的用户：不会被回退到更旧的 1.6，不会把同号的
+            // 1.6.1 测试版当成正式版，而正式版 1.6.1 发布后会被提示收敛升级。
+            Assert.True(result.IsSuccessful);
+            Assert.Equal(expectedUpdate, result.HasUpdate);
         }
 
         [Fact]

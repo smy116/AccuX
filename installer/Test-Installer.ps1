@@ -1,8 +1,8 @@
 # 安装器回归前置检查：验证生产脚本的事务入口、文件备份清单和 Inno 编译。
 param(
     [string]$Iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-    [string]$Version = '1.4',
-    [string]$FileVersion = '1.4.0.0'
+    [string]$Version = '1.6.1',
+    [string]$FileVersion = '1.6.1.0'
 )
 
 $ErrorActionPreference = 'Stop'

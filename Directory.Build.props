@@ -12,14 +12,20 @@
     <Product>AccuX</Product>
     <Authors>AccuX</Authors>
     <!--
-      The public release tag is two-part (for example v1.4). The CLR still
-      receives a four-part assembly/file version through build.ps1 when a
-      release is built (1.4.0.0).
+      Public release tags are two-part (v1.6) or three-part (v1.6.1). build.ps1
+      turns the semantic version into the CLR's four-part assembly/file version
+      (1.6.1.0) on release, and CI injects the same properties for test builds.
+
+      The defaults below only apply to a bare `dotnet build` / Visual Studio
+      build; they intentionally look like a development build so a local
+      artifact can never be mistaken for a published release.
     -->
-    <Version Condition="'$(Version)' == ''">1.4</Version>
-    <FileVersion Condition="'$(FileVersion)' == ''">1.4.0.0</FileVersion>
-    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.4.0.0</AssemblyVersion>
-    <AccuXVersion Condition="'$(AccuXVersion)' == ''">1.4</AccuXVersion>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <FileVersion Condition="'$(FileVersion)' == ''">0.0.0.0</FileVersion>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">0.0.0.0</AssemblyVersion>
+    <AccuXVersion Condition="'$(AccuXVersion)' == ''">0.0.0-dev</AccuXVersion>
+    <!-- 版本号的唯一来源是 tag / CI 参数；不要把源码提交号拼进 InformationalVersion。 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
     <!--
       CI supplies OfficePiaPath explicitly. On a developer machine prefer the

@@ -22,9 +22,16 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       assembly_version: ${{ steps.version.outputs.assembly_version }}
+      file_version: ${{ steps.version.outputs.file_version }}
       output_base_filename: ${{ steps.version.outputs.output_base_filename }}
       is_release: ${{ steps.version.outputs.is_release }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Validate tag and calculate build version
         id: version
         shell: pwsh
@@ -35,40 +42,89 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '1.4'
+
+          # 语义版本 -> CLR 四段版本：1.6 -> 1.6.0.0，1.6.1 -> 1.6.1.0。
+          function Get-FourPartVersion {
+            param([Parameter(Mandatory)][string]$Value)
+            $numeric = $Value.Split('-')[0].Split('.')
+            $patch = if ($numeric.Length -ge 3) { $numeric[2] } else { '0' }
+            return "$($numeric[0]).$($numeric[1]).$patch.0"
+          }
+
+          function Assert-VersionSegment {
+            param([Parameter(Mandatory)][string]$Value)
+            foreach ($part in $Value.Split('.')) {
+              if ([int64]$part -gt 65534) { throw "版本段必须在 0 到 65534 之间：$Value" }
+            }
+          }
+
+          # 已发布的稳定版本取仓库里最高的 vM.m[.p] tag。
+          function Get-LatestStableVersion {
+            $versions = @()
+            foreach ($tag in (& git tag --list 'v*')) {
+              if ($tag -match '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?$') {
+                $versions += [pscustomobject]@{
+                  Major = [int64]$Matches[1]
+                  Minor = [int64]$Matches[2]
+                  Patch = if ($Matches[3]) { [int64]$Matches[3] } else { [int64]0 }
+                }
+              }
+            }
+            return ($versions | Sort-Object Major, Minor, Patch | Select-Object -Last 1)
+          }
+
+          $shortSha = $env:COMMIT_SHA.Substring(0, 7)
           $isRelease = 'false'
 
           if ($env:REF_TYPE -eq 'tag') {
-            if ($env:REF_NAME -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
-              throw "非法版本 tag '$($env:REF_NAME)'。正式版本必须是 v主版本.次版本，例如 v1.4。"
+            if ($env:REF_NAME -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?$') {
+              throw "非法版本 tag '$($env:REF_NAME)'。正式版本必须是 v主版本.次版本 或 v主版本.次版本.修订号，例如 v1.6 或 v1.6.1。"
             }
 
             $major = [int64]$Matches[1]
             $minor = [int64]$Matches[2]
-            if ($major -gt 65534 -or $minor -gt 65534) {
-              throw "版本段必须在 0 到 65534 之间：$($env:REF_NAME)"
-            }
+            $version = if ($Matches[3]) { "$major.$minor.$([int64]$Matches[3])" } else { "$major.$minor" }
+            Assert-VersionSegment -Value $version
 
-            $version = "$major.$minor"
+            $assemblyVersion = Get-FourPartVersion -Value $version
+            $fileVersion = $assemblyVersion
+            $outputBaseFilename = "AccuXSetup-$version"
             $isRelease = 'true'
           }
-
-          $parts = $version.Split('.')
-          $assemblyVersion = "$($parts[0]).$($parts[1]).0.0"
-          $shortSha = $env:COMMIT_SHA.Substring(0, 7)
-          if ($isRelease -eq 'true') {
-            $outputBaseFilename = "AccuXSetup-$version"
-          }
           else {
-            $outputBaseFilename = "AccuXSetup-$version-ci.$($env:RUN_NUMBER).$shortSha"
+            $latest = Get-LatestStableVersion
+            if ($latest) {
+              $major = $latest.Major
+              $minor = $latest.Minor
+              $nextPatch = $latest.Patch + 1
+            }
+            else {
+              $major = 0
+              $minor = 0
+              $nextPatch = 1
+            }
+
+            # FileVersion 第四段用构建号，保证每次 CI 构建版本都不同。
+            if ($env:RUN_NUMBER -gt 65534) {
+              throw "构建号 $($env:RUN_NUMBER) 超出文件版本第四段上限（65534），请先发布一个正式版本来重置编号。"
+            }
+
+            $baseVersion = "$major.$minor.$nextPatch"
+            $version = "$baseVersion-ci.$($env:RUN_NUMBER).$shortSha"
+            # AssemblyVersion 只在正式发布时前移：测试版沿用已发布版本，
+            # 避免开发中途改变 CLR 绑定标识。
+            $assemblyVersion = if ($latest) { "$major.$minor.$($latest.Patch).0" } else { '0.0.0.0' }
+            $fileVersion = "$major.$minor.$nextPatch.$($env:RUN_NUMBER)"
+            $outputBaseFilename = "AccuXSetup-$version"
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
+          "file_version=$fileVersion" >> $env:GITHUB_OUTPUT
           "output_base_filename=$outputBaseFilename" >> $env:GITHUB_OUTPUT
           "is_release=$isRelease" >> $env:GITHUB_OUTPUT
 
-          Write-Host "版本：$version；程序集版本：$assemblyVersion；Release：$isRelease"
+          Write-Host "版本：$version；程序集版本：$assemblyVersion；文件版本：$fileVersion；Release：$isRelease"
 
   build:
     name: Build installer
@@ -166,6 +222,8 @@ jobs:
           & ./build.ps1 `
             -Configuration Release `
             -Version '${{ needs.prepare.outputs.version }}' `
+            -AssemblyVersion '${{ needs.prepare.outputs.assembly_version }}' `
+            -FileVersion '${{ needs.prepare.outputs.file_version }}' `
             -OfficePiaPath $env:OfficePiaPath
           if ($LASTEXITCODE -ne 0) { throw 'AccuX 构建或测试失败。' }
 
@@ -176,14 +234,14 @@ jobs:
           & ./installer/Test-Installer.ps1 `
             -Iscc $env:ISCC `
             -Version '${{ needs.prepare.outputs.version }}' `
-            -FileVersion '${{ needs.prepare.outputs.assembly_version }}'
+            -FileVersion '${{ needs.prepare.outputs.file_version }}'
           if ($LASTEXITCODE -ne 0) { throw '安装器回归测试失败。' }
 
       - name: Compile installer
         shell: pwsh
         env:
           ACCUX_VERSION: ${{ needs.prepare.outputs.version }}
-          ACCUX_FILE_VERSION: ${{ needs.prepare.outputs.assembly_version }}
+          ACCUX_FILE_VERSION: ${{ needs.prepare.outputs.file_version }}
           ACCUX_OUTPUT_BASE: ${{ needs.prepare.outputs.output_base_filename }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -247,6 +305,52 @@ jobs:
         with:
           name: AccuX-installer-${{ github.run_id }}
           path: release-assets
+
+      - name: Reject version rollback
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repository = '${{ github.repository }}'
+
+          # 只有已公开（非草稿、非预发布）的 Release 才算已发布版本。
+          $raw = & gh api "repos/$repository/releases?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw '读取已发布 Release 失败。' }
+          $releases = $raw | ConvertFrom-Json
+
+          $published = @()
+          foreach ($release in $releases) {
+            if ($release.draft -or $release.prerelease) { continue }
+            if ($release.tag_name -match '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?$') {
+              $published += [pscustomobject]@{
+                Major = [int64]$Matches[1]
+                Minor = [int64]$Matches[2]
+                Patch = if ($Matches[3]) { [int64]$Matches[3] } else { [int64]0 }
+                Tag = $release.tag_name
+              }
+            }
+          }
+
+          $new = $env:RELEASE_VERSION.Split('-')[0].Split('.')
+          $newMajor = [int64]$new[0]
+          $newMinor = [int64]$new[1]
+          $newPatch = if ($new.Length -ge 3) { [int64]$new[2] } else { [int64]0 }
+
+          foreach ($current in $published) {
+            $comparison = if ($newMajor -ne $current.Major) { $newMajor - $current.Major }
+              elseif ($newMinor -ne $current.Minor) { $newMinor - $current.Minor }
+              else { $newPatch - $current.Patch }
+            if ($comparison -lt 0) {
+              throw "版本倒退：$($env:RELEASE_VERSION) 小于已发布版本 $($current.Tag)。"
+            }
+            if ($comparison -eq 0) {
+              throw "版本重复：$($env:RELEASE_VERSION) 与已发布版本 $($current.Tag) 相同。"
+            }
+          }
+
+          Write-Host "版本校验通过：$($env:RELEASE_VERSION) 高于全部已发布版本。"
 
       - name: Create draft, upload assets, and publish
         shell: pwsh

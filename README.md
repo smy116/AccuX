@@ -64,15 +64,15 @@ AccuX.AddIn ── 引用 Host + Modules + Core，作为 Composition Root
 # 一条命令完成还原、构建、测试、边界校验
 powershell -ExecutionPolicy Bypass -File build.ps1
 
-# Release 构建（默认版本为 1.4）
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
+# Release 构建（正式版本号来自 tag，由 CI 自动传入；这里手填只用于本地复现）
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.6.1
 
 # 或手动
 dotnet build AccuX.sln -c Debug
 dotnet test AccuX.sln -c Debug
 ```
 
-当前状态：解决方案编译 0 警告 0 错误；单元测试 **217 项全部通过**（Core 78 项，BasicFinance 112 项，Mark 6 项，Compare 6 项，AddIn 15 项）。
+当前状态：解决方案编译 0 警告 0 错误；单元测试 **266 项全部通过**（Core 108 项，BasicFinance 116 项，Mark 6 项，Compare 6 项，AddIn 30 项）。
 
 构建脚本会优先使用 Visual Studio Office15 PIA，也支持通过 `-OfficePiaPath` 显式指定目录；找不到该目录时兼容使用 GAC 中的 15.0.0.0 PIA。构建结束会校验 `Microsoft.Office.Interop.Excel.dll`、`office.dll` 和 `Microsoft.Vbe.Interop.dll` 均已复制到 Release 输出目录。
 
@@ -182,7 +182,7 @@ WPS 验证项在 `docs/CompatibilityMatrix.md` 中标记为「未验证」，需
 
 ## 升级检查
 
-设置窗口可显示当前版本并手动检查 GitHub Release。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、API 响应错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，点击“下载升级包”会在浏览器中打开 GitHub 安装包地址，用户下载后手动运行普通 Inno Setup 安装程序；安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段式稳定版本号（例如 `1.4`）。
+设置窗口可显示当前版本并手动检查 GitHub Release。自动检查默认开启，插件启动后后台执行，每 24 小时最多一次；网络失败、API 响应错误或附件缺失只写入日志，不弹窗。发现新版本后会提示进入设置，点击“下载升级包”会在浏览器中打开 GitHub 安装包地址，用户下载后手动运行普通 Inno Setup 安装程序；安装前请保存工作并关闭 Excel/WPS。升级使用固定附件名 `AccuXSetup-{version}.exe` 与 `AccuXSetup-{version}.exe.sha256`，仅接受两段或三段稳定版本号（例如 `1.6`、`1.6.1`）。
 
 插件运行时从 GitHub Releases API 读取最新稳定版本：`https://api.github.com/repos/smy116/AccuX/releases/latest`。如果 GitHub 直连失败，会自动重试 `gh-proxy.com` 代理地址（完整 URL 前置 `https://gh-proxy.com/`）。API 返回 Release 元数据及 `AccuXSetup-{version}.exe` 的 `browser_download_url`；客户端只打开该 HTTPS 地址，不在本地下载、校验或启动安装程序；通过代理取得的 Release 会同时使用代理下载和说明地址。GitHub 及代理均不可用、响应无效或 Release 缺少安装包时，升级检测静默失败，不影响插件正常使用。
 
@@ -228,25 +228,45 @@ GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-
 使用 Inno Setup 6.7.3 编译 `installer/AccuX.iss`。先构建 Release 程序集，再执行安装器回归检查：
 
 ```
-powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.4
+powershell -ExecutionPolicy Bypass -File build.ps1 -Configuration Release -Version 1.6.1
 pwsh -NoProfile -File installer\Test-Installer.ps1
-ISCC.exe /DAccuXVersion=1.4 /DAccuXFileVersion=1.4.0.0 installer\AccuX.iss
+ISCC.exe /DAccuXVersion=1.6.1 /DAccuXFileVersion=1.6.1.0 installer\AccuX.iss
 ```
 
-脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。默认安装包名为 `AccuXSetup-1.4.exe`，版本参数由 CI 传入时无需修改安装脚本。
+脚本负责 .NET Framework 4.8 前置检查、程序集部署、COM 注册、x64 适配、卸载与升级策略。安装包名为 `AccuXSetup-{版本}.exe`，版本参数由 CI 从 tag 传入，无需修改安装脚本。
+
+## 版本号管理
+
+版本号的唯一来源是 Git tag，任何地方都不再维护“当前版本”常量。
+
+| 场景 | 触发 | 用户可见版本 | 程序集版本 | 文件版本 | 安装包名 |
+| --- | --- | --- | --- | --- | --- |
+| 正式版 | tag `v1.6.1` | `1.6.1` | `1.6.1.0` | `1.6.1.0` | `AccuXSetup-1.6.1.exe` |
+| 测试版 | 分支推送 / 手动触发 | `1.6.2-ci.37.d202798` | 最近正式版 | `1.6.2.37` | `AccuXSetup-1.6.2-ci.37.d202798.exe` |
+
+约定：
+
+- 正式 tag 为 `v主版本.次版本` 或 `v主版本.次版本.修订号`，例如 `v1.6`、`v1.6.1`；不接受 `v1.6.1.2`、`v01.6`、`v1.6-beta`。
+- 修订号用于修 bug：功能与兼容性变化动次版本，重大不兼容动主版本。
+- CI 测试版基于仓库中最新正式 tag 递增一个修订号，并以 `-ci.<运行号>.<短SHA>` 标识；不带后缀的版本才是正式版。
+- **程序集版本只在正式发布时前移**，测试版沿用最近正式版，避免开发中途改变 CLR 绑定标识。
+- **文件版本每次构建都不同**（测试版第四段用运行号），用于区分同一版本的多次构建。
+- 比较按 SemVer：`1.6 == 1.6.0`，同一数字版本下预发布小于正式版，因此装了 `1.6.1` 测试版的用户会在正式版 `1.6.1` 发布后收到升级提示。
 
 ## GitHub Actions 自动构建与发布
 
 `.github/workflows/build-release.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
 
-只有两段版本 tag 才会创建正式 GitHub Release：
+只有合法版本 tag 才会创建正式 GitHub Release：
 
 ```powershell
-git tag v1.4
-git push origin v1.4
+git tag v1.6.1
+git push origin v1.6.1
 ```
 
-`v1.4` 会生成 `AccuXSetup-1.4.exe`、对应的 SHA-256 文件并发布名为 `AccuX v1.4` 的 GitHub Release。`v1.4.0`、`v01.4` 和 `v1.4-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+`v1.6.1` 会生成 `AccuXSetup-1.6.1.exe`、对应的 SHA-256 文件并发布名为 `AccuX v1.6.1` 的 GitHub Release。发布前会校验该版本高于全部已发布，且不与已发布版本重复；`v1.6.1.2`、`v01.6` 和 `v1.6-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+
+发布纪律：tag 只在合并到 main 后创建，已发布的 tag 与 Release 不移动、不删除；坏版本通过下一个修订号修复。
 
 ## 人工验证清单
 

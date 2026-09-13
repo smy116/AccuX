@@ -220,28 +220,10 @@ namespace AccuX.AddIn.Updates
 
         private static bool TryParseCurrentVersion(string value, out ReleaseVersion version)
         {
-            if (ReleaseVersion.TryParse(value, out version))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            var text = value.Trim();
-            var plus = text.IndexOf('+');
-            if (plus >= 0) text = text.Substring(0, plus);
-            var dash = text.IndexOf('-');
-            if (dash >= 0) text = text.Substring(0, dash);
-            var parts = text.TrimStart('v', 'V').Split('.');
-            if (parts.Length < 2)
-            {
-                return false;
-            }
-
-            return ReleaseVersion.TryParse(parts[0] + "." + parts[1], out version);
+            // 宽松解析：保留修订号与预发布标识。测试版 1.6.1-ci.37.d202798 会得到
+            // 1.6.1 的预发布版本，因此既不会被视为高于正式版 1.6.1，也不会被
+            // 回退到更旧的 1.6；同时正式版 1.6.1 发布后能提示测试版用户收敛。
+            return ReleaseVersion.TryParseLoose(value, out version);
         }
 
         private static GitHubAssetDto FindInstaller(
