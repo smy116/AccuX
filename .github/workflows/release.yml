@@ -1,0 +1,273 @@
+name: Release AccuX
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（不带 v 前缀），例如 1.7 或 1.7.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accux-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release request
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Validate version input
+        id: version
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # 发布纪律：tag 只在合并到 main 后创建。
+          if ($env:REF -ne 'refs/heads/main') {
+            throw "发布只能在 main 分支上触发，当前 ref 为 $($env:REF)。"
+          }
+
+          $value = $env:INPUT_VERSION.Trim()
+          if ($value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?$') {
+            throw "非法发布版本号 '$value'：必须是 主版本.次版本 或 主版本.次版本.修订号（例如 1.7 或 1.7.0），不接受 v 前缀、四段版本或预发布后缀。"
+          }
+          foreach ($part in $value.Split('.')) {
+            if ([int64]$part -gt 65534) { throw "版本段必须在 0 到 65534 之间：$value" }
+          }
+
+          "version=$value" >> $env:GITHUB_OUTPUT
+          Write-Host "待发布版本：$value（tag v$value）"
+
+  build:
+    name: Build release installer
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.version }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer executable artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.setup_filename }}
+          path: release-assets
+
+      - name: Download installer checksum artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.checksum_filename }}
+          path: release-assets
+
+      - name: Download installer manifest artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.manifest_filename }}
+          path: release-assets
+
+      - name: Validate downloaded installer assets
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+          EXPECTED_FILE_VERSION: ${{ needs.build.outputs.file_version }}
+          EXPECTED_INSTALLER_VERSION: ${{ needs.build.outputs.installer_version }}
+          EXPECTED_SETUP_FILENAME: ${{ needs.build.outputs.setup_filename }}
+          EXPECTED_CHECKSUM_FILENAME: ${{ needs.build.outputs.checksum_filename }}
+          EXPECTED_MANIFEST_FILENAME: ${{ needs.build.outputs.manifest_filename }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setupPath = Join-Path 'release-assets' $env:EXPECTED_SETUP_FILENAME
+          $checksumPath = Join-Path 'release-assets' $env:EXPECTED_CHECKSUM_FILENAME
+          $manifestPath = Join-Path 'release-assets' $env:EXPECTED_MANIFEST_FILENAME
+          foreach ($path in @($setupPath, $checksumPath, $manifestPath)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Release 附件缺失：$path"
+            }
+          }
+
+          $bytes = [IO.File]::ReadAllBytes($setupPath)
+          if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+            throw 'Release 安装包不是有效的 MZ 文件。'
+          }
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ($peOffset -lt 0 -or $peOffset + 4 -gt $bytes.Length -or
+              $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+              $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
+            throw 'Release 安装包不是有效的 PE 文件。'
+          }
+
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($setupPath)
+          $fixedFileVersion = "$($info.FileMajorPart).$($info.FileMinorPart).$($info.FileBuildPart).$($info.FilePrivatePart)"
+          $fixedProductVersion = "$($info.ProductMajorPart).$($info.ProductMinorPart).$($info.ProductBuildPart).$($info.ProductPrivatePart)"
+          if ($fixedFileVersion -ne $env:EXPECTED_FILE_VERSION -or $fixedProductVersion -ne $env:EXPECTED_FILE_VERSION) {
+            throw "Release 安装包版本资源不一致：File=$fixedFileVersion，Product=$fixedProductVersion。"
+          }
+          if ($info.FileVersion.Trim() -ne $env:EXPECTED_VERSION -or $info.ProductVersion.Trim() -ne $env:EXPECTED_VERSION) {
+            throw 'Release 安装包文本版本资源不一致。'
+          }
+
+          $checksumLine = [IO.File]::ReadAllText($checksumPath).Trim()
+          if ($checksumLine -notmatch '^([0-9a-fA-F]{64}) \*(.+)$') {
+            throw "校验文件格式错误：$checksumPath"
+          }
+          $expectedHash = $Matches[1].ToLowerInvariant()
+          $checksumFileName = $Matches[2]
+          $actualHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expectedHash -ne $actualHash -or $checksumFileName -ne $env:EXPECTED_SETUP_FILENAME) {
+            throw "Release 安装包 SHA-256 校验失败：期望 $expectedHash，实际 $actualHash。"
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $checks = @{
+            version = $env:EXPECTED_VERSION
+            displayVersion = $env:EXPECTED_VERSION
+            installerVersion = $env:EXPECTED_INSTALLER_VERSION
+            fileVersion = $env:EXPECTED_FILE_VERSION
+            fileName = $env:EXPECTED_SETUP_FILENAME
+            sha256 = $actualHash
+            commitSha = $env:EXPECTED_COMMIT_SHA
+            runNumber = $env:EXPECTED_RUN_NUMBER
+            runId = $env:EXPECTED_RUN_NUMBER
+          }
+          foreach ($property in $checks.Keys) {
+            if ([string]$manifest.$property -ne [string]$checks[$property]) {
+              throw "manifest 字段 $property 不一致：实际 '$($manifest.$property)'。"
+            }
+          }
+          if ([int64]$manifest.sizeBytes -ne (Get-Item -LiteralPath $setupPath).Length) {
+            throw 'manifest sizeBytes 与下载的安装包大小不一致。'
+          }
+          Write-Host "Release 附件校验通过：$env:EXPECTED_SETUP_FILENAME（$actualHash）" -ForegroundColor Green
+
+      - name: Reject version rollback
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repository = '${{ github.repository }}'
+
+          # 只有已公开（非草稿、非预发布）的 Release 才算已发布版本。
+          $raw = & gh api "repos/$repository/releases?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw '读取已发布 Release 失败。' }
+          $releases = $raw | ConvertFrom-Json
+
+          $published = @()
+          foreach ($release in $releases) {
+            if ($release.draft -or $release.prerelease) { continue }
+            if ($release.tag_name -match '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?$') {
+              $published += [pscustomobject]@{
+                Major = [int64]$Matches[1]
+                Minor = [int64]$Matches[2]
+                Patch = if ($Matches[3]) { [int64]$Matches[3] } else { [int64]0 }
+                Tag = $release.tag_name
+              }
+            }
+          }
+
+          $new = $env:RELEASE_VERSION.Split('-')[0].Split('.')
+          $newMajor = [int64]$new[0]
+          $newMinor = [int64]$new[1]
+          $newPatch = if ($new.Length -ge 3) { [int64]$new[2] } else { [int64]0 }
+
+          foreach ($current in $published) {
+            $comparison = if ($newMajor -ne $current.Major) { $newMajor - $current.Major }
+              elseif ($newMinor -ne $current.Minor) { $newMinor - $current.Minor }
+              else { $newPatch - $current.Patch }
+            if ($comparison -lt 0) {
+              throw "版本倒退：$($env:RELEASE_VERSION) 小于已发布版本 $($current.Tag)。"
+            }
+            if ($comparison -eq 0) {
+              throw "版本重复：$($env:RELEASE_VERSION) 与已发布版本 $($current.Tag) 相同。"
+            }
+          }
+
+          Write-Host "版本校验通过：$($env:RELEASE_VERSION) 高于全部已发布版本。"
+
+      - name: Ensure release tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repository = '${{ github.repository }}'
+          $tag = "v$($env:RELEASE_VERSION)"
+
+          # 幂等：失败重跑时复用指向同一提交的已有 tag，指向其他提交则拒绝。
+          $raw = & gh api "repos/$repository/git/ref/tags/$tag" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $ref = $raw | ConvertFrom-Json
+            $target = $ref.object.sha
+            if ($ref.object.type -eq 'tag') {
+              $tagObject = & gh api "repos/$repository/git/tags/$target" | ConvertFrom-Json
+              $target = $tagObject.object.sha
+            }
+            if ($target -ne $env:TARGET_SHA) {
+              throw "tag $tag 已存在并指向 $target，与本次发布的提交 $($env:TARGET_SHA) 不一致。请确认该版本是否已发布，或先删除该 tag 再重跑。"
+            }
+            Write-Host "复用已存在的 tag $tag（$target）。"
+          }
+          else {
+            & gh api --method POST "repos/$repository/git/refs" -f "ref=refs/tags/$tag" -f "sha=$($env:TARGET_SHA)"
+            if ($LASTEXITCODE -ne 0) { throw "创建 tag $tag 失败。" }
+            Write-Host "已创建 tag $tag（$($env:TARGET_SHA)）。"
+          }
+
+      - name: Create draft, upload assets, and publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v${{ needs.build.outputs.version }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repository = '${{ github.repository }}'
+          $tag = $env:TAG_NAME
+          $releaseApi = "repos/$repository/releases/tags/$tag"
+
+          $existing = & gh api $releaseApi 2>$null
+          $existingExitCode = $LASTEXITCODE
+          if ($existingExitCode -eq 0) {
+            $release = $existing | ConvertFrom-Json
+            if (-not $release.draft) {
+              throw "Release $tag 已经公开，拒绝覆盖已有附件。"
+            }
+            Write-Host "复用已有草稿 Release $tag。"
+          }
+          else {
+            & gh release create $tag `
+              --repo $repository `
+              --verify-tag `
+              --draft `
+              --title "AccuX v$($env:RELEASE_VERSION)" `
+              --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "创建草稿 Release 失败：$tag" }
+          }
+
+          $assets = Get-ChildItem -LiteralPath 'release-assets' -File | ForEach-Object { $_.FullName }
+          if (-not $assets) { throw 'Release 没有可上传的安装包附件。' }
+          & gh release upload $tag @assets --repo $repository --clobber
+          if ($LASTEXITCODE -ne 0) { throw "上传 Release 附件失败：$tag" }
+
+          & gh release edit $tag --repo $repository --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "公开 Release 失败：$tag" }
+          Write-Host "已发布 AccuX v$($env:RELEASE_VERSION)。"

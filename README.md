@@ -43,7 +43,7 @@ AccuX.sln
 │  └─ AccuX.Modules.Mark.Tests
 ├─ tools/                       # register / unregister / make-icons
 ├─ installer/AccuX.iss          # Inno Setup 安装工程
-├─ .github/workflows/            # 推送构建与 tag 发布
+├─ .github/workflows/            # build 自动构建 / release 手动发布
 └─ docs/CompatibilityMatrix.md  # 兼容性矩阵
 ```
 
@@ -233,7 +233,7 @@ pwsh -NoProfile -File installer\Test-Installer.ps1
 pwsh -NoProfile -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 1.6.1.0
 ```
 
-构建脚本负责调用 Inno Setup、校验 MZ/PE 头和版本资源，并生成 `.sha256` 与 `.manifest.json`。安装包名为 `AccuXSetup-{显示版本}.exe`，版本参数由 CI 从 tag 或分支构建号传入，无需修改安装脚本。
+构建脚本负责调用 Inno Setup、校验 MZ/PE 头和版本资源，并生成 `.sha256` 与 `.manifest.json`。安装包名为 `AccuXSetup-{显示版本}.exe`，版本参数由构建工作流传入：正式版来自 release 工作流的版本号输入，测试版来自分支构建号，无需修改安装脚本。
 
 ## 版本号管理
 
@@ -241,12 +241,13 @@ pwsh -NoProfile -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 
 
 | 场景 | 触发 | 显示版本 | 安装器数字版本 | 程序集版本 | 文件版本 | 安装包名 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 正式版 | tag `v1.6.1` | `1.6.1` | `1.6.1` | `1.6.1.0` | `1.6.1.0` | `AccuXSetup-1.6.1.exe` |
-| 测试版 | 分支推送 / 手动触发 | `1.6.2-ci.37.d202798` | `1.6.2` | 最近正式版 | `1.6.2.37` | `AccuXSetup-1.6.2-ci.37.d202798.exe` |
+| 正式版 | Release 工作流（输入 `1.6.1`，自动创建 tag `v1.6.1`） | `1.6.1` | `1.6.1` | `1.6.1.0` | `1.6.1.0` | `AccuXSetup-1.6.1.exe` |
+| 测试版 | 分支推送 / 手动运行 Build 工作流 | `1.6.2-ci.37.d202798` | `1.6.2` | 最近正式版 | `1.6.2.37` | `AccuXSetup-1.6.2-ci.37.d202798.exe` |
 
 约定：
 
 - 正式 tag 为 `v主版本.次版本` 或 `v主版本.次版本.修订号`，例如 `v1.6`、`v1.6.1`；不接受 `v1.6.1.2`、`v01.6`、`v1.6-beta`。
+- 正式 tag 由 Release 工作流在 main 上自动创建，不手动推送；发布时输入的版本号本身不带 `v` 前缀。
 - 修订号用于修 bug：功能与兼容性变化动次版本，重大不兼容动主版本。
 - CI 测试版基于仓库中最新正式 tag 递增一个修订号，并以 `-ci.<运行号>.<短SHA>` 标识；不带后缀的版本才是正式版。
 - **程序集版本只在正式发布时前移**，测试版沿用最近正式版，避免开发中途改变 CLR 绑定标识。
@@ -256,20 +257,22 @@ pwsh -NoProfile -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 
 
 ## GitHub Actions 自动构建与发布
 
-`.github/workflows/build-release.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
+构建与发布拆成两个工作流：
 
-构建阶段通过 `actions/upload-artifact@v7` 的 `archive: false` 分别上传 EXE、SHA-256 校验文件和 manifest；Actions Artifact 列表直接提供 `.exe`，不再只有包含 EXE 的 ZIP。Release job 使用 `actions/download-artifact@v8` 下载原始文件，并在上传附件前重新校验 PE 头、版本资源、manifest 和 SHA-256。Windows 10/11 下载的文件仍可能带有 Mark-of-the-Web；由于暂未配置代码签名，系统可能显示阻止或安全提示。
+- `.github/workflows/build.yml` 在所有分支推送和手动触发时构建 Windows 安装包，并在 Actions 的 Artifacts 中保留 30 天。它同时通过 `workflow_call` 作为可复用工作流，供 release 工作流按正式版本号调用，构建步骤只维护一份。工作流固定使用 .NET SDK 9、Inno Setup 6.7.3 和 Office 15 PIA。
+- `.github/workflows/release.yml` 只手动触发，负责正式版构建与发布。
 
-只有合法版本 tag 才会创建正式 GitHub Release：
+构建阶段通过 `actions/upload-artifact@v7` 的 `archive: false` 分别上传 EXE、SHA-256 校验文件和 manifest；Actions Artifact 列表直接提供 `.exe`，不再只有包含 EXE 的 ZIP。发布阶段使用 `actions/download-artifact@v8` 下载原始文件，并在上传附件前重新校验 PE 头、版本资源、manifest 和 SHA-256。Windows 10/11 下载的文件仍可能带有 Mark-of-the-Web；由于暂未配置代码签名，系统可能显示阻止或安全提示。
 
-```powershell
-git tag v1.6.1
-git push origin v1.6.1
-```
+正式发布步骤：
 
-`v1.6.1` 会生成 `AccuXSetup-1.6.1.exe`、对应的 SHA-256 文件并发布名为 `AccuX v1.6.1` 的 GitHub Release。发布前会校验该版本高于全部已发布，且不与已发布版本重复；`v1.6.1.2`、`v01.6` 和 `v1.6-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。
+1. 打开 Actions → **Release AccuX** → **Run workflow**，分支选择 `main`，填写版本号（不带 `v` 前缀，例如 `1.8` 或 `1.8.0`）。
+2. 工作流先校验触发 ref 必须是 `main`、版本号是合法的两段或三段数字版本，再调用 build 工作流按该版本构建安装包，跑完整单元测试与安装器回归测试。
+3. 构建产物重新校验通过后，工作流确认该版本高于全部已发布版本且不重复，自动创建 `v<版本>` tag，发布名为 `AccuX v<版本>` 的 GitHub Release，附件为 `AccuXSetup-<版本>.exe`、对应的 `.sha256` 与 manifest。
 
-发布纪律：tag 只在合并到 main 后创建，已发布的 tag 与 Release 不移动、不删除；坏版本通过下一个修订号修复。
+输入 `1.8` 会生成 `AccuXSetup-1.8.exe` 并创建 tag `v1.8`；`v1.8`、`1.8.0.1`、`1.8-beta` 会被工作流拒绝。普通分支构建的安装包名会追加 `ci.<运行号>.<短SHA>`，不会创建 Release。发布中途失败时，在同一提交上重跑即可复用已创建的 tag 与草稿 Release；若 main 已前移，需先删除该 tag 再重跑。
+
+发布纪律：tag 只在合并到 main 后由 Release 工作流创建，已发布的 tag 与 Release 不移动、不删除；坏版本通过下一个修订号修复。
 
 ## 人工验证清单
 
