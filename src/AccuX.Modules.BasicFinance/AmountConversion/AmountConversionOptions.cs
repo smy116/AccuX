@@ -17,7 +17,7 @@ namespace AccuX.Modules.BasicFinance.AmountConversion
 
     /// <summary>
     /// 金额折合选项（规格 §13.1）。
-    /// V1 采用：除百 / 除千 / 除万，可选是否添加“万”字；暂不接在线汇率。
+    /// AccuX 采用：除百 / 除千 / 除万，可选是否添加“万”字；暂不接在线汇率。
     /// </summary>
     public sealed class AmountConversionOptions
     {

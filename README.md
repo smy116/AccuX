@@ -1,8 +1,8 @@
-# AccuX V1
+# AccuX
 
 面向财务人员的 Windows Excel / WPS 表格效率插件（COM Add-in）。
 
-V1 现包含四个财务功能、一个工作簿目录功能、一个标记模块和一个区域对比模块：
+AccuX 现包含四个财务功能、一个工作簿目录功能、一个标记模块和一个区域对比模块：
 
 1. **一键舍入** — 对选区金额统一四舍五入，每次点击弹出小数位窗口（默认 2 位）。
 2. **金额折合** — 按除百 / 除千 / 除万折合选区金额，可选添加“万”字。
@@ -205,9 +205,9 @@ GitHub Release 继续上传 `AccuXSetup-{version}.exe` 及对应的 `AccuXSetup-
 - **批量选区限定在 UsedRange**：财务四项、颜色标记和区域对比只处理当前 Selection 与当前工作表原生 `UsedRange` 的交集；无交集时终止，交集后的范围用于读取、写回和阈值计算。
 - 一次 Command 只从当前 Selection 捕获一次 `RangeTarget`；后续读写与验证都针对同一 Target，不重新读取 Selection。
 - 批量整块读写，禁止逐 Cell COM 操作。
-- V1 不提供 Snapshot、AccuX Undo 或事务级回滚；宿主状态（`ScreenUpdating` 等）在异常时仍会恢复。
+- AccuX 不提供 Snapshot、AccuX Undo 或事务级回滚；宿主状态（`ScreenUpdating` 等）在异常时仍会恢复。
 
-## 数据处理规则（V1 固定行为）
+## 数据处理规则（AccuX 固定行为）
 
 | 数据类型 | 一键舍入 | 金额折合 | 选区求和 | 金额大写 |
 | --- | --- | --- | --- | --- |
@@ -293,7 +293,7 @@ pwsh -NoProfile -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 
 13. 点击“存在对比”，分别捕获两个工作簿或工作表的连续区域，确认区域1独有、区域2独有、相同项、标题排除、隐藏数据跳过、重复次数、底色标记、清除标记和四张导出表均符合预期。
 14. 在装有 WPS 的机器上重复以上关键链路，回填 WPS 行。
 
-## 已知限制（V1）
+## 已知限制（AccuX）
 
 - 不实现 Snapshot / AccuX Undo / 事务回滚。
 - 不实现超大 Range 分块边读边写；超过 `maxProcessCells` 直接拒绝。

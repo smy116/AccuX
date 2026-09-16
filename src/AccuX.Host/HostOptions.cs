@@ -8,7 +8,7 @@ namespace AccuX.Host
         /// <summary>超过该单元格数时提示用户确认后执行。</summary>
         public long LargeSelectionWarning { get; set; } = 100000;
 
-        /// <summary>超过该单元格数时 V1 直接拒绝处理。</summary>
+        /// <summary>超过该单元格数时 AccuX 直接拒绝处理。</summary>
         public long MaxProcessCells { get; set; } = 500000;
     }
 }

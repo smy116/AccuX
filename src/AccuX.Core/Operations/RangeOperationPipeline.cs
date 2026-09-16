@@ -85,7 +85,7 @@ namespace AccuX.Core.Operations
                     throw new ArgumentException("操作目标不能为空。", nameof(context));
                 }
 
-                // V1 不对合并区域执行批量写回。Host 在捕获和重新校验阶段都会
+                // AccuX 不对合并区域执行批量写回。Host 在捕获和重新校验阶段都会
                 // 设置该标志；Pipeline 再做一次纯 CLR 层拦截，避免其他 Host
                 // 实现忘记处理时仍然修改合并单元格。
                 if (target.ContainsMergedCells)

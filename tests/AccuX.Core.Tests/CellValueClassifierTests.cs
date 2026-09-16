@@ -4,7 +4,7 @@ using Xunit;
 namespace AccuX.Core.Tests
 {
     /// <summary>
-    /// CellValueClassifier 是 V1 唯一的分类入口，必须有独立测试（规格 §26 Core Unit Test）。
+    /// CellValueClassifier 是 AccuX 唯一的分类入口，必须有独立测试（规格 §26 Core Unit Test）。
     /// </summary>
     public class CellValueClassifierTests
     {

@@ -16,7 +16,7 @@ using AccuX.Modules.BasicFinance.UI;
 namespace AccuX.Modules.BasicFinance
 {
     /// <summary>
-    /// V1 唯一业务模块（规格 §5.4 / §6）。
+    /// AccuX 唯一业务模块（规格 §5.4 / §6）。
     /// 负责基础功能的 Ribbon Command 定义、用户输入校验与业务算法调用；
     /// 不解决 Excel/WPS 差异，不直接持有 COM 对象。
     /// </summary>

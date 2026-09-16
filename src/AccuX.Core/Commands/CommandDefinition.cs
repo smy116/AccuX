@@ -44,7 +44,7 @@ namespace AccuX.Core.Commands
 
         public string Description { get; }
 
-        /// <summary>对应的 Ribbon 控件 ID（V1 与命令 ID 一致）。</summary>
+        /// <summary>对应的 Ribbon 控件 ID（AccuX 与命令 ID 一致）。</summary>
         public string RibbonControlId { get; }
 
         public CommandHandler Handler { get; }

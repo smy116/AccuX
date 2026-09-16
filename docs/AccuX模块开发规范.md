@@ -48,7 +48,7 @@ Agent 收到“新增模块”“新增 Command”或“扩展现有模块”的
 4. 对修改工作表的功能遵守数据安全与 fail-before-write 原则；
 5. 复用 Core 已有公共能力，不重复建设 Range、日志、配置、宿主状态等基础设施；
 6. 业务代码默认留在所属 Module，只有出现真实且稳定的跨模块复用后才提升到 Core；
-7. 保持 V1 的轻量模块机制：编译期引用、AddIn 显式注册，不实现动态插件发现。
+7. 保持 AccuX 的轻量模块机制：编译期引用、AddIn 显式注册，不实现动态插件发现。
 
 一句话原则：
 
@@ -161,7 +161,7 @@ AccuX.AddIn 是 Composition Root，负责实例创建、依赖组合和显式模
 
 ### 3.3 不建设动态插件框架
 
-V1 新增模块仍采用：
+AccuX 新增模块仍采用：
 
 > **最小接口 + 编译期项目引用 + AddIn 显式注册。**
 
@@ -333,7 +333,7 @@ IReadOnlyList<IAccuXModule> modules = new IAccuXModule[]
 
 ### 6.4 不通过模块动态生成 Ribbon
 
-V1 Ribbon 由 `AccuX.AddIn` 的静态 CustomUI XML 定义。
+AccuX Ribbon 由 `AccuX.AddIn` 的静态 CustomUI XML 定义。
 
 新增按钮时：
 
@@ -470,7 +470,7 @@ Selection COM
 
 ## 9. fail-before-write 与最大处理范围
 
-V1 数据安全采用：
+AccuX 数据安全采用：
 
 > **尽量在第一次写入工作表之前发现问题。**
 
@@ -493,15 +493,15 @@ Value / Formula 批量读取
 
 ### 9.2 不做分块边读边写
 
-V1 不实现超大 Range 的 Chunk 边读边写。
+AccuX 不实现超大 Range 的 Chunk 边读边写。
 
 原因：
 
 - 当前策略强调 fail-before-write；
-- V1 没有事务回滚；
+- AccuX 没有事务回滚；
 - Chunk 1 已写入、Chunk 2 后续失败会造成天然部分写入。
 
-因此 V1 在 `maxProcessCells` 内采用整块批量读取、内存计算、完整 WritePlan，然后批量写回。
+因此 AccuX 在 `maxProcessCells` 内采用整块批量读取、内存计算、完整 WritePlan，然后批量写回。
 
 ### 9.3 两级范围阈值
 
@@ -527,7 +527,7 @@ CellCount > maxProcessCells
 
 具体默认值必须依据 Excel/WPS benchmark，不得在新增模块里硬编码一个未经验证的“性能安全值”。
 
-### 9.4 V1 不承诺事务原子性
+### 9.4 AccuX 不承诺事务原子性
 
 如果实际 COM 批量 Write 阶段仍然异常：
 
@@ -862,7 +862,7 @@ File.WriteAllText(config.json)
 
 设计允许使用 DPAPI 保存敏感配置。
 
-V1 当前没有必须加密的 API Key，但新增模块若未来引入 Token、Secret 等敏感信息：
+AccuX 当前没有必须加密的 API Key，但新增模块若未来引入 Token、Secret 等敏感信息：
 
 - 仍通过统一 ConfigManager 能力读写；
 - 使用现有的可选 DPAPI 支持；
@@ -1403,7 +1403,7 @@ Agent 在宣布模块完成前，逐项检查：
 | COM 能否在 Task.Run 使用？               | 不能                                                     |
 | 配置怎么存？                             | 统一 ConfigManager；非敏感 JSON，敏感可选 DPAPI          |
 | 日志能否记录用户金额/公式？              | 默认不能                                                 |
-| 是否实现 Undo / Snapshot / Transaction？ | V1 不实现                                                |
+| 是否实现 Undo / Snapshot / Transaction？ | AccuX 不实现                                                |
 
 ---
 
@@ -1456,7 +1456,7 @@ if (isWps) 特殊处理
 
 1. **Module 只做业务，Host 只做宿主差异，Core 只做真实公共能力，AddIn 只做组合与入口。**
 2. **一次 Command 只捕获一次 RangeTarget，永远不在写回阶段跟随新的 Selection。**
-3. **在 `maxProcessCells` 内批量读、内存算、生成完整 WritePlan、验证后再写；V1 不边读边写。**
+3. **在 `maxProcessCells` 内批量读、内存算、生成完整 WritePlan、验证后再写；AccuX 不边读边写。**
 4. **COM 不进入 Core / Module，COM Read / Write 留在宿主 UI / STA 线程。**
 5. **公式平台差异由 Host 规范化；具体业务公式变换与重复执行规则留在所属 Command / Module。**
 6. **不为假设未来做过度抽象：没有真实跨模块复用，就不要把业务能力提升到 Core，也不要建设动态插件系统。**

@@ -1,4 +1,4 @@
-# AccuX V1 开发设计规格
+# AccuX 开发设计规格
 
 ## 1. 项目概述
 
@@ -6,20 +6,20 @@ AccuX 是一款面向财务人员的 Windows Excel / WPS 表格效率插件。
 
 产品目标是将财务工作中高频、重复、容易出错的 Excel 操作标准化和一键化，同时保持对 Microsoft Excel 与 WPS 表格的兼容。
 
-V1 不追求“大而全”，只实现四个核心功能：
+AccuX 不追求“大而全”，只实现四个核心功能：
 
 1. 一键舍入
 2. 金额折合
 3. 选区求和
 4. 金额大写
 
-V1 的重点不是功能数量，而是先建立一套稳定、可扩展的基础架构，使后续增加财务工具时不需要重新设计 Excel/WPS 兼容、Ribbon、Range 操作、日志、配置等公共能力。
+AccuX 的重点不是功能数量，而是先建立一套稳定、可扩展的基础架构，使后续增加财务工具时不需要重新设计 Excel/WPS 兼容、Ribbon、Range 操作、日志、配置等公共能力。
 
 ---
 
-# 2. V1 设计原则
+# 2. AccuX 设计原则
 
-AccuX V1 遵循以下原则：
+AccuX 遵循以下原则：
 
 ### 2.1 Excel / WPS 双平台
 
@@ -43,9 +43,9 @@ AccuX V1 遵循以下原则：
 - 跳过无法安全处理的单元格；
 - 对大量数据采用批量操作；
 - 在写回前完成 Selection、可写性、公式安全和待写入结果验证；
-- V1 不承诺事务级原子写入、AccuX 自定义 Undo 或数据自动回滚。
+- AccuX 不承诺事务级原子写入、AccuX 自定义 Undo 或数据自动回滚。
 
-V1 的数据安全策略是 **尽量在写入前失败（fail before write）**，而不是建立复杂的数据事务恢复系统。
+AccuX 的数据安全策略是 **尽量在写入前失败（fail before write）**，而不是建立复杂的数据事务恢复系统。
 
 ---
 
@@ -57,7 +57,7 @@ V1 的数据安全策略是 **尽量在写入前失败（fail before write）**�
 
 # 3. 技术选型
 
-本次 V1 建议定稿为：
+本次定稿为：
 
 ```text
 开发环境：Visual Studio 2022
@@ -72,7 +72,7 @@ UI：WPF
 安装包：Inno Setup（正式发布阶段）
 ```
 
-V1 开发阶段应保证 `AccuX.AddIn` 可以在 Visual Studio 中按 F5 直接启动 Microsoft Excel 进行调试，使以下代码能够直接设置断点：
+AccuX 开发阶段应保证 `AccuX.AddIn` 可以在 Visual Studio 中按 F5 直接启动 Microsoft Excel 进行调试，使以下代码能够直接设置断点：
 
 ```text
 COM Add-in 入口
@@ -89,7 +89,7 @@ WPS 调试继续使用同一套程序集和核心代码；根据具体 WPS 安�
 
 # 4. 总体架构
 
-V1 采用四个主要工程：
+AccuX 采用四个主要工程：
 
 ```text
 AccuX.sln
@@ -203,8 +203,8 @@ Core → Host → Core
 - `AccuX.AddIn` 负责启动和依赖组合，不包含具体财务算法；
 - `AccuX.Host` 负责宿主差异、COM 边界和 Core 宿主接口的具体实现；
 - `AccuX.Core` 只提供跨模块公共能力及必要的宿主抽象契约；
-- `AccuX.Modules.BasicFinance` 持有四个 V1 功能及其业务算法；
-- V1 保留模块接口，但不实现目录扫描、Assembly 动态发现、热加载等复杂插件框架。
+- `AccuX.Modules.BasicFinance` 持有四个 AccuX 功能及其业务算法；
+- AccuX 保留模块接口，但不实现目录扫描、Assembly 动态发现、热加载等复杂插件框架。
 
 # 5. 各工程职责
 
@@ -219,11 +219,11 @@ Core → Host → Core
 - Ribbon callback；
 - 初始化 Host、Config、Logger；
 - 创建 `RangeOperationPipeline` 并注入 Host 接口实现；
-- 显式注册 V1 已知模块；
+- 显式注册 AccuX 已知模块；
 - Command 注册与回调分发；
 - WPF 窗口与宿主窗口关联。
 
-V1 **不做复杂模块发现或动态加载**。
+AccuX **不做复杂模块发现或动态加载**。
 
 推荐直接由 AddIn 显式创建模块列表，例如：
 
@@ -240,7 +240,7 @@ IReadOnlyList<IAccuXModule> modules = new IAccuXModule[]
 ModuleRegistry
 ```
 
-用于统一初始化、Command 收集和 Shutdown，但不得在 V1 实现：
+用于统一初始化、Command 收集和 Shutdown，但不得在 AccuX 中实现：
 
 ```text
 扫描 Modules 目录
@@ -290,7 +290,7 @@ Assembly.LoadFrom
 
 ### Selection、RangeTarget 与 Range 数据访问
 
-V1 对 Selection 的使用遵循：
+AccuX 对 Selection 的使用遵循：
 
 > **一次操作只在开始阶段读取一次 Selection，并立即固化为 `RangeTarget`；后续读取、验证和写回都针对同一个 `RangeTarget`，不得再次依赖当前 Selection。**
 
@@ -341,7 +341,7 @@ ValidateWrite(target)
 Write(target, writePlan)
 ```
 
-V1 Host 重点提供：
+AccuX Host 重点提供：
 
 - 从当前 Selection 与当前工作表 `UsedRange` 的交集创建 `RangeTarget`；
 - 判断 Selection 是否为可处理的 Range；
@@ -364,7 +364,7 @@ V1 Host 重点提供：
 - 结果统计区分选区是否包含隐藏行、隐藏列，并统计被跳过的隐藏单元格数量。
 - 原始 Selection 与 `UsedRange` 无交集时，Host 在读取前终止操作，不绕过范围限制。
 
-V1 在 `maxProcessCells` 硬限制以内采用整块批量读取和内存处理：
+AccuX 在 `maxProcessCells` 硬限制以内采用整块批量读取和内存处理：
 
 ```text
 RangeTarget
@@ -400,7 +400,7 @@ Core / Module 内存处理
 
 ### Formula 处理与规范化契约
 
-公式处理是 V1 的重点宿主能力。
+公式处理是 AccuX 的重点宿主能力。
 
 `AccuX.Host` 负责统一处理：
 
@@ -469,7 +469,7 @@ Host 层应避免将平台特有 COM 类型传播到 Core 和业务 Module。
 
 ### 合并单元格和特殊区域
 
-V1 需要识别可能影响批量读写安全性的特殊区域，包括：
+AccuX 需要识别可能影响批量读写安全性的特殊区域，包括：
 
 - 合并单元格；
 - 多区域 Selection；
@@ -492,7 +492,7 @@ V1 需要识别可能影响批量读写安全性的特殊区域，包括：
 
 ### 宿主状态管理
 
-V1 不建立数据 Snapshot、AccuX Undo、事务回滚等数据恢复机制。
+AccuX 不建立数据 Snapshot、AccuX Undo、事务回滚等数据恢复机制。
 
 宿主状态管理只处理 Excel/WPS Application 级运行状态，例如：
 
@@ -545,7 +545,7 @@ AccuX Undo
 事务 Commit / Rollback
 ```
 
-如果某个 V1 命令完全不修改 Application 全局状态，则不要求为了形式统一而创建 Scope。
+如果某个 AccuX 命令完全不修改 Application 全局状态，则不要求为了形式统一而创建 Scope。
 
 原则是：
 
@@ -570,7 +570,7 @@ AccuX Undo
 
 ### COM Object Lifetime 与线程模型
 
-V1 必须明确 COM 对象生命周期和线程边界。
+AccuX 必须明确 COM 对象生命周期和线程边界。
 
 核心规则：
 
@@ -590,7 +590,7 @@ Core / Modules 只接收 CLR DTO、RangeTarget、FormulaInfo 和业务数据
 - 是否对具体临时 RCW 显式释放，以 Excel/WPS 实际兼容性验证为准；
 - 宿主拥有的 `Application` 等对象不得由业务代码擅自释放。
 
-V1 线程模型采用：
+AccuX 线程模型采用：
 
 > **所有 Excel/WPS COM 访问默认只在宿主 UI / STA 线程执行。**
 
@@ -603,7 +603,7 @@ Task.Run(() =>
 });
 ```
 
-V1 四个财务算法计算量很小，默认同步执行：
+AccuX 四个财务算法计算量很小，默认同步执行：
 
 ```text
 STA 线程 COM Read
@@ -687,9 +687,9 @@ AccuX.Host
 
 ---
 
-### V1 实际实现范围
+### AccuX 实际实现范围
 
-V1 不需要完整封装 Excel/WPS Object Model。
+AccuX 不需要完整封装 Excel/WPS Object Model。
 
 首版重点实现以下能力：
 
@@ -773,7 +773,7 @@ Features/ExcelCellMarkHost             ICellMarkHost：可见单元格底色标�
 
 > **Core 是插件框架的公共核心，不是业务代码的公共存放区，也不认识具体 Excel/WPS COM 实现。**
 
-V1 建议包括：
+AccuX 建议包括：
 
 ```text
 Modules/
@@ -871,7 +871,7 @@ FormulaTransformService（当前阶段）
 
 ## 5.4 AccuX.Modules.BasicFinance
 
-V1 唯一业务模块，负责“一键舍入、金额折合、选区求和、金额大写”四个功能及其全部业务逻辑。
+AccuX 唯一业务模块，负责“一键舍入、金额折合、选区求和、金额大写”四个功能及其全部业务逻辑。
 
 主要职责：
 
@@ -920,7 +920,7 @@ AccuX.Modules.BasicFinance/
 
 # 6. 模块化设计
 
-V1 只有一个业务模块，模块机制只保留最小边界，不建设动态插件系统。
+AccuX 只有一个业务模块，模块机制只保留最小边界，不建设动态插件系统。
 
 统一接口精简为：
 
@@ -937,7 +937,7 @@ public interface IAccuXModule
 }
 ```
 
-V1 不在 `IAccuXModule` 中放置：
+AccuX 不在 `IAccuXModule` 中放置：
 
 ```text
 Name
@@ -950,9 +950,9 @@ GetRibbonGroup()
 
 这些信息当前没有真实运行时需求，不为未来假设场景提前扩展接口。
 
-Ribbon 在 V1 中由 `AccuX.AddIn` 的静态 CustomUI XML 定义，按钮 ID 映射到 Command ID；业务模块只注册 Command，不动态贡献 Ribbon UI。
+Ribbon 在 AccuX 中由 `AccuX.AddIn` 的静态 CustomUI XML 定义，按钮 ID 映射到 Command ID；业务模块只注册 Command，不动态贡献 Ribbon UI。
 
-V1：
+AccuX：
 
 ```text
 AccuX.Modules.BasicFinance.dll
@@ -966,9 +966,9 @@ AccuX.Modules.Audit.dll
 AccuX.Modules.DataCleaning.dll
 ```
 
-但 V1 不因此实现一个通用第三方插件系统。
+但 AccuX 不因此实现一个通用第三方插件系统。
 
-V1 模块注册采用：
+AccuX 模块注册采用：
 
 > **最小接口 + 编译期项目引用 + AddIn 显式注册。**
 
@@ -1000,7 +1000,7 @@ ModuleRegistry.Register(...)
 
 # 7. Ribbon 设计
 
-V1 只建立一个：
+AccuX 只建立一个：
 
 ```text
 AccuX
@@ -1017,7 +1017,7 @@ AccuX
    第二行：金额大写 | 生成目录 | 批注助手
 ```
 
-不在 V1 堆放大量按钮。
+不在 AccuX 堆放大量按钮。
 
 Ribbon 各功能组的按钮布局高度不得超过 2 行。多按钮组使用纵向 `box` 包含最多两个横向行 `box`，显式控制行数，避免宿主默认排列成 3 行；新增按钮应横向扩展或拆分功能组，不得增加第三行。基础功能组固定为上述 2 行、3 列，按钮统一使用 `size="normal"`。此要求约束按钮布局行数，宿主 Ribbon 的实际像素高度由 Excel / WPS 控制；布局变更后须分别验证两个宿主中的显示效果。
 
@@ -1104,7 +1104,7 @@ public enum HostKind
 
 # 9. 单元格分类
 
-这是 V1 的核心公共能力。
+这是 AccuX 的核心公共能力。
 
 选区读取后，统一识别为：
 
@@ -1134,7 +1134,7 @@ public enum CellValueType
 
 增加 Date / Boolean 的原因是：财务操作不能把日期序列值或逻辑值误识别为普通金额数字。Host 负责根据宿主返回值、格式和公式结果等已验证信息进行归一化，`CellValueClassifier` 输出统一分类。
 
-四个 V1 功能默认：
+四个 AccuX 功能默认：
 
 ```text
 Date / FormulaDate       → 跳过
@@ -1231,7 +1231,7 @@ Core → Excel/WPS Interop
 
 业务功能只提供“怎么转换”的逻辑，不负责遍历 COM Cell，也不负责 Excel/WPS 差异。
 
-V1 不在 Pipeline 中实现：
+AccuX 不在 Pipeline 中实现：
 
 ```text
 Snapshot
@@ -1243,7 +1243,7 @@ Transaction
 
 # 11. 普通数值和公式的统一原则
 
-V1 明确采用：
+AccuX 明确采用：
 
 > 数值进，数值出；公式进，公式出。
 
@@ -1258,7 +1258,7 @@ V1 明确采用：
 - 不强制处理；
 - 在处理结果中提示。
 
-这是整个 V1 的核心数据安全规则。
+这是整个 AccuX 的核心数据安全规则。
 
 ---
 
@@ -1268,7 +1268,7 @@ V1 明确采用：
 
 对当前选区内金额进行统一四舍五入。
 
-V1 支持：
+AccuX 支持：
 
 ```text
 保留 2 位
@@ -1335,7 +1335,7 @@ Formula → Value
 
 ## 12.4 默认跳过
 
-以下情况 V1 不强制处理：
+以下情况 AccuX 不强制处理：
 
 - 文本；
 - 空单元格；
@@ -1357,9 +1357,9 @@ Formula → Value
 
 # 13. 金额折合
 
-## 13.1 V1 定义
+## 13.1 AccuX 定义
 
-V1 金额折合采用：
+AccuX 金额折合采用：
 
 > 用户选择除百、除千、除万，对选区金额进行折合处理，可选是否添加“万”字。
 
@@ -1457,7 +1457,7 @@ string
 
 ## 14.3 输出方式
 
-V1 默认：
+AccuX 默认：
 
 ```text
 输出到当前选择区域
@@ -1467,7 +1467,7 @@ V1 默认：
 
 ## 14.4 不使用 UDF
 
-V1 不采用：
+AccuX 不采用：
 
 ```text
 =AccuXAmountUppercase(...)
@@ -1495,7 +1495,7 @@ V1 不采用：
 
 # 15. 四个功能的数据处理规则
 
-V1 统一规则：
+AccuX 统一规则：
 
 | 数据类型                 | 一键舍入 | 金额折合 | 选区求和 | 金额大写 |
 | ------------------------ | -------- | -------- | -------- | -------- |
@@ -1509,7 +1509,7 @@ V1 统一规则：
 | 复杂公式                 | 修改公式 | 修改公式 | 输出大写 |
 | 不支持类型               | 跳过     | 跳过     | 跳过     |
 
-这个规则应作为 V1 固定行为。
+这个规则应作为 AccuX 固定行为。
 
 ---
 
@@ -1522,9 +1522,9 @@ V1 统一规则：
 逐 Cell COM Write
 ```
 
-V1 不实现“超大 Range 分块边读边写”。原因是 V1 同时采用 `fail before write` 且不提供事务级 Rollback；如果边读边写，后续 Chunk 失败时会天然产生部分写入状态，与当前安全策略冲突。
+AccuX 不实现“超大 Range 分块边读边写”。原因是 AccuX 同时采用 `fail before write` 且不提供事务级 Rollback；如果边读边写，后续 Chunk 失败时会天然产生部分写入状态，与当前安全策略冲突。
 
-V1 采用两个阈值：
+AccuX 采用两个阈值：
 
 ```text
 largeSelectionWarning
@@ -1541,12 +1541,12 @@ largeSelectionWarning < CellCount <= maxProcessCells
     → 明确提示用户，确认后执行
 
 CellCount > maxProcessCells
-    → V1 直接拒绝处理
+    → AccuX 直接拒绝处理
 ```
 
 阈值由统一设置节提供。默认值为警告 100000、最大 500000；正式发布前仍应通过 Excel/WPS 实测 benchmark 验证性能和兼容性。
 
-在 `maxProcessCells` 以内，V1 原则上执行：
+在 `maxProcessCells` 以内，AccuX 原则上执行：
 
 ```text
 RangeTarget
@@ -1566,13 +1566,13 @@ CLR 内存处理
 
 > **在开始修改工作表之前，完成当前操作所需的全部读取、分类、业务计算和待写结果生成。**
 
-如果未来真实需求要求支持超过 V1 上限的超大区域，再单独设计 Chunk + Recovery / Partial Failure 策略，不在 V1 提前实现。
+如果未来真实需求要求支持超过 AccuX 上限的超大区域，再单独设计 Chunk + Recovery / Partial Failure 策略，不在 AccuX 中提前实现。
 
 ---
 
 # 17. 公式修改
 
-V1 的公式转换逻辑由 `AccuX.Modules.BasicFinance/Common/FormulaTransformService` 统一实现，供“一键舍入”和“金额折合”复用。
+AccuX 的公式转换逻辑由 `AccuX.Modules.BasicFinance/Common/FormulaTransformService` 统一实现，供“一键舍入”和“金额折合”复用。
 
 不要让：
 
@@ -1651,7 +1651,7 @@ AmountConversionCommand
 
 自己的业务规则，而不是 FormulaTransformService 的通用职责。
 
-V1 默认原则：
+AccuX 默认原则：
 
 > **用户每次主动执行 Command 都视为一次新的明确操作。FormulaTransformService 不进行自动去重。**
 
@@ -1661,7 +1661,7 @@ V1 默认原则：
 
 # 18. 写入前保护策略
 
-V1 不实现以下机制：
+AccuX 不实现以下机制：
 
 ```text
 Values / Formulas Snapshot
@@ -1696,7 +1696,7 @@ Value / Formula 批量读取
 
 只有上述步骤全部成功后，才开始写回。
 
-V1 明确不承诺 COM 批量写入具备数据库事务意义上的原子性。如果宿主在实际写回阶段发生异常：
+AccuX 明确不承诺 COM 批量写入具备数据库事务意义上的原子性。如果宿主在实际写回阶段发生异常：
 
 ```text
 记录异常
@@ -1706,7 +1706,7 @@ V1 明确不承诺 COM 批量写入具备数据库事务意义上的原子性。
 
 但不尝试通过 AccuX 自建 Snapshot 自动恢复工作表数据。
 
-该取舍用于控制 V1 复杂度；后续只有在真实用户需求和故障数据证明有必要时，才评估独立 Undo / Recovery 机制。
+该取舍用于控制 AccuX 复杂度；后续只有在真实用户需求和故障数据证明有必要时，才评估独立 Undo / Recovery 机制。
 
 # 19. Selection / RangeTarget 保护
 
@@ -1736,7 +1736,7 @@ Selection 只用于创建一次 `RangeTarget`。
 - 目标区域是否仍允许修改；
 - 是否出现新的保护状态或其他阻止安全写入的条件。
 
-超过 `largeSelectionWarning` 但未超过 `maxProcessCells` 时进行确认；超过 `maxProcessCells` 时 V1 直接拒绝处理。
+超过 `largeSelectionWarning` 但未超过 `maxProcessCells` 时进行确认；超过 `maxProcessCells` 时 AccuX 直接拒绝处理。
 
 阈值统一放入 `settings` 配置节，由 AddIn 设置窗口编辑；保存后更新共享 `HostOptions` 和基础功能提示，区域对比在下一次操作时读取最新值。
 
@@ -1773,7 +1773,7 @@ JSON
 可选 DPAPI
 ```
 
-但 V1 配置保持简单。
+但 AccuX 配置保持简单。
 
 例如：
 
@@ -1798,7 +1798,7 @@ JSON
 
 `settings` 中的两个阈值同时作用于基础财务和区域对比，且必须大于 0、警告阈值不能超过最大阈值。旧版 `basicFinance` / `compare` 阈值首次加载时迁移到 `settings`，旧字段保留；`roundDigits` 和区域对比颜色继续保留在原配置节。`autoCheckForUpdates` 控制启动后的 GitHub Release 检查，`lastUpdateCheckUtc` 由插件维护。
 
-V1 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
+AccuX 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
 
 接口仍然保留，为以后扩展准备。
 
@@ -1806,7 +1806,7 @@ V1 没有 API Key，因此 DPAPI 暂时没有必须使用的场景。
 
 # 22. 日志
 
-V1 必须有基础日志。
+AccuX 必须有基础日志。
 
 记录：
 
@@ -1933,7 +1933,7 @@ WPF Owner
 
 只有实际验证过的宿主 API 和部署链路才进入正式支持范围。
 
-# 26. V1 测试
+# 26. AccuX 测试
 
 ## Core Unit Test
 
@@ -2036,7 +2036,7 @@ x86 / x64
 
 ## 安装与部署约定
 
-V1 开发阶段优先保证本地注册和 Visual Studio 调试链路，不提前开发自定义安装器。
+AccuX 开发阶段优先保证本地注册和 Visual Studio 调试链路，不提前开发自定义安装器。
 
 正式发布安装包统一使用：
 
@@ -2055,7 +2055,7 @@ Inno Setup
 
 安装注册方式必须和开发期注册方式保持同一逻辑来源，避免出现“VS 能调试、安装包无法加载”的两套配置。
 
-# 27. V1 开发顺序
+# 27. AccuX 开发顺序
 
 ## Phase 0：兼容性验证
 
@@ -2162,7 +2162,7 @@ Inno Setup 安装工程
 安装 / 升级 / 卸载验证
 ```
 
-V1 Phase 5 仍不包含 AccuX 自定义 Undo、Snapshot 或事务回滚。
+Phase 5 仍不包含 AccuX 自定义 Undo、Snapshot 或事务回滚。
 
 # 28. 编码强制规则
 
@@ -2183,7 +2183,7 @@ Vibe Coding 必须遵循以下规则：
 13. 无法安全处理的公式必须跳过。
 14. 一次 Command 只能从当前 Selection 创建一次 `RangeTarget`；后续读取、验证和写回不得重新依赖当前 Selection。
 15. `RangeTarget` 只能包含 CLR 身份信息和地址信息，不得携带 COM 对象。
-16. V1 在 `maxProcessCells` 内完成整块批量读取、内存计算和完整 WritePlan 生成；超过上限直接拒绝，不实现分块边读边写。
+16. AccuX 在 `maxProcessCells` 内完成整块批量读取、内存计算和完整 WritePlan 生成；超过上限直接拒绝，不实现分块边读边写。
 17. Range 优先批量读取和写入，禁止逐 Cell 高频 COM 调用。
 18. Formula API 差异和 Formula 规范化由 Host 处理；具体业务公式转换留在所属 Module。
 19. `FormulaTransformService` 不实现“防止重复包裹”或通用去重；重复操作规则属于具体 Command。
@@ -2193,18 +2193,18 @@ Vibe Coding 必须遵循以下规则：
 23. 所有 Ribbon callback 必须统一异常处理。
 24. WPF 不实现财务计算逻辑。
 25. Config 统一由 ConfigManager 管理。
-26. `IAccuXModule` 只保留最小生命周期和 Command 注册能力；V1 不实现动态 Ribbon contribution。
-27. V1 禁止实现不必要的目录扫描、反射插件发现、热加载和复杂依赖解析。
+26. `IAccuXModule` 只保留最小生命周期和 Command 注册能力；AccuX 不实现动态 Ribbon contribution。
+27. AccuX 禁止实现不必要的目录扫描、反射插件发现、热加载和复杂依赖解析。
 28. BasicFinance 由 AddIn 显式注册；单个模块失败不得导致 AccuX 整体失效。
 29. `HostStateScope` 只恢复 AccuX 实际修改过的 Application 状态，不负责工作表数据恢复。
-30. V1 不实现 Snapshot、AccuX Undo、Transaction 或自动数据 Rollback。
+30. AccuX 不实现 Snapshot、AccuX Undo、Transaction 或自动数据 Rollback。
 31. 修改型操作必须在写回前完成当前操作所需的全部读取、分类、业务计算和完整待写结果生成。
 32. 开发版本必须支持从 Visual Studio 直接启动 Excel 进行 F5 调试。
 33. 正式安装包使用 Inno Setup 制作。
 34. 不得因为“以后可能复用”而提前公共化业务代码。
 35. 所有 Ribbon 可点击按钮必须配置图标；图标资源统一由 AccuX.AddIn 管理，不得由业务 Module 自行加载 Ribbon 图标。
 
-# 29. V1 Definition of Done
+# 29. AccuX Definition of Done
 
 一个功能只有同时满足以下条件才算完成：
 
@@ -2243,7 +2243,7 @@ Vibe Coding 必须遵循以下规则：
 [ ] Inno Setup 安装包可完成安装、加载和卸载验证
 ```
 
-V1 Definition of Done 不要求：
+AccuX Definition of Done 不要求：
 
 ```text
 AccuX Undo
@@ -2252,7 +2252,7 @@ Transaction Rollback
 动态第三方插件加载
 ```
 
-# 30. V1 最终结构
+# 30. AccuX 最终结构
 
 最终第一版应保持简单：
 
@@ -2330,7 +2330,7 @@ installer/
 └─ Inno Setup Project
 ```
 
-V1 的核心不是实现大量功能，而是完成：
+AccuX 的核心不是实现大量功能，而是完成：
 
 ```text
 稳定 Excel/WPS 宿主差异层
@@ -2352,7 +2352,7 @@ V1 的核心不是实现大量功能，而是完成：
 
 只有真正具有跨模块复用价值的能力，才提升到 Core。
 
-V1 保留 `IAccuXModule` 契约，但模块采用编译期引用和显式注册，不为未来假设需求提前建设复杂插件系统。
+AccuX 保留 `IAccuXModule` 契约，但模块采用编译期引用和显式注册，不为未来假设需求提前建设复杂插件系统。
 
 因此未来增加一个新的财务工具时，理想情况下只需要：
 
@@ -2378,4 +2378,4 @@ Range 批量读写
 配置
 ```
 
-这就是 AccuX V1 需要保留的可扩展性：**接口稳定、依赖清晰、实现克制，先服务真实业务，再按真实复用需求扩展。**
+这就是 AccuX 需要保留的可扩展性：**接口稳定、依赖清晰、实现克制，先服务真实业务，再按真实复用需求扩展。**

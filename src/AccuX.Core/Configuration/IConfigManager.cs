@@ -1,7 +1,7 @@
 namespace AccuX.Core.Configuration
 {
     /// <summary>
-    /// 配置访问抽象。V1 统一由 <see cref="JsonConfigManager"/> 实现（见编码规则 25）。
+    /// 配置访问抽象。AccuX 统一由 <see cref="JsonConfigManager"/> 实现（见编码规则 25）。
     /// </summary>
     public interface IConfigManager
     {

@@ -4,7 +4,7 @@ namespace AccuX.Core.Modules
 {
     /// <summary>
     /// 业务模块契约（规格 §6）。
-    /// V1 只保留最小生命周期与 Command 注册能力；不包含 Name/Version/Order/GetRibbonGroup 等无真实运行时需求的信息。
+    /// AccuX 只保留最小生命周期与 Command 注册能力；不包含 Name/Version/Order/GetRibbonGroup 等无真实运行时需求的信息。
     /// </summary>
     public interface IAccuXModule
     {

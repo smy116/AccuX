@@ -22,7 +22,7 @@ namespace AccuX.Modules.BasicFinance.ChineseAmount
         private static readonly string[] SectionUnits = { "", "万", "亿", "万亿" };
 
         /// <summary>
-        /// V1 支持的最大金额（约 9999 万亿），超过时抛出异常由调用方提示。
+        /// AccuX 支持的最大金额（约 9999 万亿），超过时抛出异常由调用方提示。
         /// </summary>
         public const decimal MaxAmount = 9999999999999999.99m;
 
@@ -33,7 +33,7 @@ namespace AccuX.Modules.BasicFinance.ChineseAmount
         {
             if (amount > MaxAmount || amount < -MaxAmount)
             {
-                throw new ArgumentOutOfRangeException(nameof(amount), "金额超出 V1 支持范围。");
+                throw new ArgumentOutOfRangeException(nameof(amount), "金额超出 AccuX 支持范围。");
             }
 
             if (amount == 0m)

@@ -43,7 +43,7 @@
 | ScreenUpdating | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | EnableEvents | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
 | DisplayAlerts | Excel | 16.0 | x64 | 待验证 | HostStateScope 保存/恢复 |
-| Calculation | Excel | 16.0 | x64 | 待验证 | V1 默认不切换计算模式 |
+| Calculation | Excel | 16.0 | x64 | 待验证 | AccuX 默认不切换计算模式 |
 | WPF Owner | Excel | 16.0 | x64 | 待验证 | SetWindowLongPtr 关联主窗口 |
 | 安装包加载 | Excel | 16.0 | x64 | 待验证 | Inno Setup 6.7.3 已完成 CI 编译，真实宿主加载仍需人工验证 |
 | 卸载 / 升级 | Excel | 16.0 | x64 | 待验证 | Inno Setup 6.7.3 已完成 CI 编译，真实安装/卸载仍需人工验证 |
@@ -70,12 +70,12 @@
 
 | 项 | 说明 |
 | --- | --- |
-| `Formula` / `Formula2` | V1 统一通过 `Range.Formula` 读写；规范化边界位于 `AccuX.Host`。若 WPS 或新 Excel 出现差异，仅修改 Host。 |
-| 公式参数分隔符 | V1 假设中文环境使用逗号；若发现分号区域设置差异，在 Host 规范化边界处理。 |
-| COM 释放 | V1 不对临时 RCW 显式调用 `Marshal.ReleaseComObject`，以实际兼容性验证为准。 |
+| `Formula` / `Formula2` | AccuX 统一通过 `Range.Formula` 读写；规范化边界位于 `AccuX.Host`。若 WPS 或新 Excel 出现差异，仅修改 Host。 |
+| 公式参数分隔符 | AccuX 假设中文环境使用逗号；若发现分号区域设置差异，在 Host 规范化边界处理。 |
+| COM 释放 | AccuX 不对临时 RCW 显式调用 `Marshal.ReleaseComObject`，以实际兼容性验证为准。 |
 | Ribbon 回调可见性 | `Connect` 必须使用 `[ClassInterface(ClassInterfaceType.AutoDual)]`。Office 通过 IDispatch 按名称调用 `onLoad` / `onAction` / `getImage`；`ClassInterfaceType.None` 只暴露接口方法（`GetCustomUI` 可用），普通类方法无法被 IDispatch 解析，Office 会静默丢弃整个 Ribbon（选项卡不显示，且不报错）。实测：改回 AutoDual 后 `OnRibbonLoad` 触发，选项卡与全部按钮正常显示。 |
-| Office PIA 版本 | 本机 GAC 仅有 Excel/office/Vbe.Interop PIA 的 **15.0.0.0** 版本；NuGet 的 16.x PIA 强依赖 office.dll 16.0，运行时 `FileNotFoundException`。因此统一引用并随包部署 GAC 15.0 PIA（`Private=true`）。15.0 PIA 的接口 IID 与 Excel 16 宿主一致，V1 使用的对象模型调用兼容。 |
-| 分块边读边写 | V1 不实现；超过 `maxProcessCells` 直接拒绝，保证 fail before write。 |
+| Office PIA 版本 | 本机 GAC 仅有 Excel/office/Vbe.Interop PIA 的 **15.0.0.0** 版本；NuGet 的 16.x PIA 强依赖 office.dll 16.0，运行时 `FileNotFoundException`。因此统一引用并随包部署 GAC 15.0 PIA（`Private=true`）。15.0 PIA 的接口 IID 与 Excel 16 宿主一致，AccuX 使用的对象模型调用兼容。 |
+| 分块边读边写 | AccuX 不实现；超过 `maxProcessCells` 直接拒绝，保证 fail before write。 |
 
 ## 如何更新本文件
 

@@ -4,7 +4,7 @@
     <RootNamespace>AccuX.Modules.BasicFinance</RootNamespace>
     <AssemblyName>AccuX.Modules.BasicFinance</AssemblyName>
     <UseWPF>true</UseWPF>
-    <Description>AccuX V1 唯一业务模块：基础财务功能与工作簿目录。</Description>
+    <Description>AccuX 唯一业务模块：基础财务功能与工作簿目录。</Description>
   </PropertyGroup>
 
   <ItemGroup>

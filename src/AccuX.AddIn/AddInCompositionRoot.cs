@@ -59,7 +59,7 @@ namespace AccuX.AddIn
         public string AccuXVersion { get; private set; }
 
         /// <summary>
-        /// 启动 AccuX：初始化基础设施并显式注册 V1 模块。
+        /// 启动 AccuX：初始化基础设施并显式注册 AccuX 模块。
         /// </summary>
         public void Start()
         {
@@ -104,7 +104,7 @@ namespace AccuX.AddIn
             _wpfPrompt = new WpfUserPrompt(_rangeHost.Context, _settings.LargeSelectionWarning, basicConfig.RoundDigits);
             Prompt = _wpfPrompt;
 
-            // 显式模块注册（V1 不做目录扫描 / 反射发现 / 热加载）。
+            // 显式模块注册（AccuX 不做目录扫描 / 反射发现 / 热加载）。
             _moduleRegistry = new ModuleRegistry(Logger);
             var basicFinance = new BasicFinanceModule { PromptOverride = Prompt };
             _moduleRegistry.Register(basicFinance, context, Dispatcher);

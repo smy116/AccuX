@@ -13,7 +13,7 @@ namespace AccuX.Host
     /// </para>
     /// <para>
     /// COM 对象只在本工程内部使用，不外泄到 Core / Module。
-    /// V1 不对临时 RCW 显式调用 Marshal.ReleaseComObject（以实际兼容性验证为准），依赖 GC 回收。
+    /// AccuX 不对临时 RCW 显式调用 Marshal.ReleaseComObject（以实际兼容性验证为准），依赖 GC 回收。
     /// </para>
     /// </summary>
     public sealed partial class ExcelRangeOperationHost : ExcelHostBase, IRangeOperationHost
@@ -70,7 +70,7 @@ namespace AccuX.Host
 
             if (areas > 1)
             {
-                throw new HostOperationException("V1 不支持多区域选区，请选择单个连续区域后重试。");
+                throw new HostOperationException("AccuX 不支持多区域选区，请选择单个连续区域后重试。");
             }
 
             // 批量功能只在当前 Selection 与工作表原生 UsedRange 的交集内生效。
@@ -91,7 +91,7 @@ namespace AccuX.Host
                 throw new HostOperationException(
                     string.Format(
                         CultureInfo.CurrentCulture,
-                        "选区包含 {0} 个单元格，超过 V1 上限 {1}。请缩小选区后重试。",
+                        "选区包含 {0} 个单元格，超过 AccuX 上限 {1}。请缩小选区后重试。",
                         cellCount,
                         _options.MaxProcessCells));
             }
@@ -102,7 +102,7 @@ namespace AccuX.Host
             var containsMerged = DetectMergedCells(selection);
             if (containsMerged)
             {
-                throw new HostOperationException("V1 不支持包含合并单元格的选区，请取消合并后重试。");
+                throw new HostOperationException("AccuX 不支持包含合并单元格的选区，请取消合并后重试。");
             }
 
             return new RangeTarget(

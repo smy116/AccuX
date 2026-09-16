@@ -56,7 +56,7 @@ namespace AccuX.Host
 
             if (ContainsTrue(merged))
             {
-                throw new HostOperationException("V1 不支持包含合并单元格的选区，请取消合并后重试。");
+                throw new HostOperationException("AccuX 不支持包含合并单元格的选区，请取消合并后重试。");
             }
 
             var cells = new List<CellData>(rowCount * columnCount);
@@ -827,7 +827,7 @@ namespace AccuX.Host
 
         /// <summary>
         /// 将宿主公式表达式规范化为统一形式（统一 '=' 前缀）。
-        /// 区域设置导致的参数分隔符差异在 V1 中暂不做替换：Excel/WPS 中文环境均使用逗号。
+        /// 区域设置导致的参数分隔符差异在 AccuX 中暂不做替换：Excel/WPS 中文环境均使用逗号。
         /// </summary>
         private static string NormalizeFormulaForRead(string rawFormula)
         {

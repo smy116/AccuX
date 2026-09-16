@@ -1,4 +1,4 @@
-; AccuX V1 安装脚本（规格 §26 安装与部署约定）
+; AccuX 安装脚本（规格 §26 安装与部署约定）
 ;
 ; 编译：pwsh -File installer\Build-Installer.ps1 -Version 1.6.1 -FileVersion 1.6.1.0
 ; 产物：AccuXSetup-{AccuXDisplayVersion}.exe

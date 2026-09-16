@@ -2,7 +2,7 @@ namespace AccuX.Core.Cells
 {
     /// <summary>
     /// 统一的单元格分类结果（规格 §9）。
-    /// 四个 V1 功能都依据该分类决定处理策略，禁止各自判断空值/公式/数字/日期/布尔。
+    /// 四个 AccuX 功能都依据该分类决定处理策略，禁止各自判断空值/公式/数字/日期/布尔。
     /// </summary>
     public enum CellValueType
     {
