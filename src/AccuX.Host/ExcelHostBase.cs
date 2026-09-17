@@ -419,33 +419,12 @@ namespace AccuX.Host
 
         /// <summary>
         /// 读取目标选区覆盖的行隐藏状态。
-        /// 优先读取选区覆盖的完整行集合；只有明确不是“全部隐藏”时才逐行回退，
-        /// 以避免兼容宿主把混合状态误报为“全部可见”。
+        /// 逐行读取完整行的 Hidden；筛选后的混合区域可能返回 True 或 False，
+        /// 不能用整区返回值推断每一行的隐藏状态。
         /// </summary>
         protected static bool[] ReadHiddenRows(Excel.Worksheet worksheet, Excel.Range range, int rowCount)
         {
             var result = new bool[rowCount];
-            object combinedHidden = null;
-
-            try
-            {
-                // Hidden 要求 Range 覆盖完整行。range.Rows 仍然只覆盖选区的列片段，
-                // 在 Excel/WPS 中对混合可见性可能返回 Null、抛异常，或被兼容宿主折叠为 False。
-                combinedHidden = range.EntireRow.Hidden;
-            }
-            catch
-            {
-                // 回退到逐行读取。
-            }
-
-            // 兼容宿主可能把“部分隐藏、部分可见”折叠成 False；False 不能证明所有行都可见，
-            // 因此只有明确的 True 才走批量快路径，其他情况统一逐行读取。
-            if (TryConvertBooleanValue(combinedHidden, out var allHidden) && allHidden)
-            {
-                Fill(result, true);
-                return result;
-            }
-
             var firstRow = range.Row;
             for (var row = 0; row < rowCount; row++)
             {
@@ -472,33 +451,11 @@ namespace AccuX.Host
 
         /// <summary>
         /// 读取目标选区覆盖的列隐藏状态。
-        /// 优先读取选区覆盖的完整列集合；只有明确不是“全部隐藏”时才逐列回退，
-        /// 以避免兼容宿主把混合状态误报为“全部可见”。
+        /// 逐列读取完整列的 Hidden；混合可见性不能由整区返回值推断。
         /// </summary>
         protected static bool[] ReadHiddenColumns(Excel.Worksheet worksheet, Excel.Range range, int columnCount)
         {
             var result = new bool[columnCount];
-            object combinedHidden = null;
-
-            try
-            {
-                // Hidden 要求 Range 覆盖完整列。range.Columns 仍然只覆盖选区的行片段，
-                // 在 Excel/WPS 中对混合可见性可能返回 Null、抛异常，或被兼容宿主折叠为 False。
-                combinedHidden = range.EntireColumn.Hidden;
-            }
-            catch
-            {
-                // 回退到逐列读取。
-            }
-
-            // 兼容宿主可能把“部分隐藏、部分可见”折叠成 False；False 不能证明所有列都可见，
-            // 因此只有明确的 True 才走批量快路径，其他情况统一逐列读取。
-            if (TryConvertBooleanValue(combinedHidden, out var allHidden) && allHidden)
-            {
-                Fill(result, true);
-                return result;
-            }
-
             var firstColumn = range.Column;
             for (var column = 0; column < columnCount; column++)
             {
@@ -582,12 +539,5 @@ namespace AccuX.Host
             }
         }
 
-        private static void Fill(bool[] values, bool value)
-        {
-            for (var i = 0; i < values.Length; i++)
-            {
-                values[i] = value;
-            }
-        }
     }
 }
