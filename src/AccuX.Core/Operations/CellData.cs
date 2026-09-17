@@ -9,16 +9,19 @@ namespace AccuX.Core.Operations
     /// </summary>
     public sealed class CellData
     {
-        public CellData(int row, int column)
+        public CellData(int row, int column, int areaIndex = 0)
         {
+            AreaIndex = areaIndex;
             Row = row;
             Column = column;
         }
 
-        /// <summary>相对于 RangeTarget 的行偏移（0 基）。</summary>
+        public int AreaIndex { get; }
+
+        /// <summary>相对于所属区域的行偏移（0 基）。</summary>
         public int Row { get; }
 
-        /// <summary>相对于 RangeTarget 的列偏移（0 基）。</summary>
+        /// <summary>相对于所属区域的列偏移（0 基）。</summary>
         public int Column { get; }
 
         /// <summary>统一分类结果。</summary>

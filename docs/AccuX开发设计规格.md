@@ -345,7 +345,7 @@ AccuX Host 重点提供：
 
 - 从当前 Selection 与当前工作表 `UsedRange` 的交集创建 `RangeTarget`；
 - 判断 Selection 是否为可处理的 Range；
-- 判断是否为多区域 Selection；
+- 枚举多区域 Selection，逐区域裁剪到 `UsedRange`，使用矩形差集去除重叠；
 - 判断是否包含合并单元格；
 - 获取 Range 地址、行数、列数及单元格数量；
 - 按 `RangeTarget` 批量读取 Value；
@@ -357,7 +357,9 @@ AccuX Host 重点提供：
 
 隐藏行与隐藏列的处理规则：
 
-- `RangeTarget` 的地址、行数、列数和单元格数量按 Selection 与 `UsedRange` 的交集计算；
+- `RangeTarget.Areas` 保存各连续区域，尺寸按各区域与 `UsedRange` 的交集计算并去重；多区域总 `RowCount`/`ColumnCount` 为 0，`CellCount` 为去重后的总数；
+- `CellData` 和 `CellWrite` 以 `AreaIndex` 加区域内行列偏移定位，Host 按区域批量原位读写，不写未选中的间隙；
+- 所有区域先统一校验再写回，但运行中 COM 异常不提供事务回滚；区域比较仍只支持单个连续区域；
 - Host 在 `Read(target)` 阶段识别每个单元格所在行、列是否隐藏，并写入 `CellData`；
 - `RangeOperationPipeline` 统一跳过隐藏行/列中的单元格，修改型业务 Module 不重复实现该规则；只读业务按同一 `CellData.IsHidden` 元数据过滤；
 - `ValidateWrite(target, writePlan)` 再次检查待写单元格的隐藏状态，若读取后状态发生变化则终止写回；

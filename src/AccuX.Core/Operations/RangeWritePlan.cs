@@ -17,7 +17,7 @@ namespace AccuX.Core.Operations
 
         public RangeTarget Target { get; }
 
-        /// <summary>按行优先顺序排列的单元格数据，长度等于 Target.CellCount。</summary>
+        /// <summary>按区域顺序、区域内行优先顺序排列的单元格数据，长度等于 Target.CellCount。</summary>
         public IReadOnlyList<CellData> Cells { get; }
 
         /// <summary>选区当前是否包含被隐藏的行。</summary>
@@ -63,11 +63,14 @@ namespace AccuX.Core.Operations
     /// </summary>
     public sealed class CellWrite
     {
-        private CellWrite(int row, int column)
+        private CellWrite(int row, int column, int areaIndex)
         {
+            AreaIndex = areaIndex;
             Row = row;
             Column = column;
         }
+
+        public int AreaIndex { get; }
 
         public int Row { get; }
 
@@ -87,23 +90,23 @@ namespace AccuX.Core.Operations
             get { return Formula != null; }
         }
 
-        public static CellWrite ValueWrite(int row, int column, object value, string numberFormat = null)
+        public static CellWrite ValueWrite(int row, int column, object value, string numberFormat = null, int areaIndex = 0)
         {
-            return new CellWrite(row, column)
+            return new CellWrite(row, column, areaIndex)
             {
                 Value = value,
                 NumberFormat = numberFormat
             };
         }
 
-        public static CellWrite FormulaWrite(int row, int column, string formula)
+        public static CellWrite FormulaWrite(int row, int column, string formula, int areaIndex = 0)
         {
             if (string.IsNullOrWhiteSpace(formula))
             {
                 throw new ArgumentException("公式表达式不能为空。", nameof(formula));
             }
 
-            return new CellWrite(row, column)
+            return new CellWrite(row, column, areaIndex)
             {
                 Formula = formula
             };
@@ -145,14 +148,14 @@ namespace AccuX.Core.Operations
             _writes.Add(write);
         }
 
-        public void AddValue(int row, int column, object value, string numberFormat = null)
+        public void AddValue(int row, int column, object value, string numberFormat = null, int areaIndex = 0)
         {
-            Add(CellWrite.ValueWrite(row, column, value, numberFormat));
+            Add(CellWrite.ValueWrite(row, column, value, numberFormat, areaIndex));
         }
 
-        public void AddFormula(int row, int column, string formula)
+        public void AddFormula(int row, int column, string formula, int areaIndex = 0)
         {
-            Add(CellWrite.FormulaWrite(row, column, formula));
+            Add(CellWrite.FormulaWrite(row, column, formula, areaIndex));
         }
     }
 }

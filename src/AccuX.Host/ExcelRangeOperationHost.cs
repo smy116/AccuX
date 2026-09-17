@@ -59,62 +59,13 @@ namespace AccuX.Host
                 throw new HostOperationException("当前选区不是有效的单元格区域，请先选择一个数据区域。");
             }
 
-            var areas = SafeAreaCount(selection);
-            var originalRowCount = SafeRowCount(selection);
-            var originalColumnCount = SafeColumnCount(selection);
-
-            if (originalRowCount <= 0 || originalColumnCount <= 0)
-            {
-                throw new HostOperationException("当前选区为空，请先选择一个数据区域。");
-            }
-
-            if (areas > 1)
-            {
-                throw new HostOperationException("AccuX 不支持多区域选区，请选择单个连续区域后重试。");
-            }
-
-            // 批量功能只在当前 Selection 与工作表原生 UsedRange 的交集内生效。
-            // Selection 本身仍由 GetSelectionRange 原样获取，批注助手等单元格功能不受影响。
-            selection = RestrictSelectionToUsedRange(worksheet, selection);
-            var rowCount = SafeRowCount(selection);
-            var columnCount = SafeColumnCount(selection);
-            var cellCount = (long)rowCount * columnCount;
-            var address = SafeAddress(selection);
-
-            if (rowCount <= 0 || columnCount <= 0)
-            {
-                throw new HostOperationException("UsedRange 内没有可处理的单元格，请重新选择数据区域。");
-            }
-
-            if (cellCount > _options.MaxProcessCells)
-            {
-                throw new HostOperationException(
-                    string.Format(
-                        CultureInfo.CurrentCulture,
-                        "选区包含 {0} 个单元格，超过 AccuX 上限 {1}。请缩小选区后重试。",
-                        cellCount,
-                        _options.MaxProcessCells));
-            }
-
-            var workbookKey = BuildWorkbookKey(workbook);
-            var worksheetKey = BuildWorksheetKey(worksheet);
-            var worksheetName = SafeWorksheetName(worksheet);
-            var containsMerged = DetectMergedCells(selection);
-            if (containsMerged)
-            {
-                throw new HostOperationException("AccuX 不支持包含合并单元格的选区，请取消合并后重试。");
-            }
-
+            var areas = ExcelSelectionAreas.Capture(worksheet, selection, _options.MaxProcessCells);
             return new RangeTarget(
-                workbookKey,
-                worksheetKey,
-                worksheetName,
-                address,
-                rowCount,
-                columnCount,
-                cellCount,
-                isMultiArea: false,
-                containsMergedCells: containsMerged);
+                BuildWorkbookKey(workbook),
+                BuildWorksheetKey(worksheet),
+                SafeWorksheetName(worksheet),
+                areas,
+                containsMergedCells: false);
         }
 
         /// <summary>
@@ -127,6 +78,28 @@ namespace AccuX.Host
                 return WriteCheckResult.Failure("操作目标已丢失，请重新执行。");
             }
 
+            try
+            {
+                var plans = SplitWritePlan(target, writePlan);
+                for (var i = 0; i < target.Areas.Count; i++)
+                {
+                    var check = ValidateAreaWrite(target.GetAreaTarget(i), plans[i]);
+                    if (!check.CanWrite)
+                    {
+                        return check;
+                    }
+                }
+
+                return WriteCheckResult.Success();
+            }
+            catch (Exception ex)
+            {
+                return WriteCheckResult.Failure("写入前校验失败：" + ex.Message);
+            }
+        }
+
+        private WriteCheckResult ValidateAreaWrite(RangeTarget target, RangeWritePlan writePlan)
+        {
             try
             {
                 var workbook = ResolveWorkbook(target);
@@ -227,9 +200,19 @@ namespace AccuX.Host
         /// </summary>
         public string[,] ReadNumberFormats(RangeTarget target)
         {
+            if (target.IsMultiArea)
+            {
+                throw new HostOperationException("多区域格式请按区域读取。");
+            }
+
             var worksheet = ResolveWorksheetOrThrow(target);
             var range = worksheet.Range[target.Address];
             return ReadNumberFormatMatrix(range, target.RowCount, target.ColumnCount);
+        }
+
+        public string[,] ReadNumberFormats(RangeTarget target, int areaIndex)
+        {
+            return ReadNumberFormats(target.GetAreaTarget(areaIndex));
         }
 
         private static bool DetectMergedCells(Excel.Range range)

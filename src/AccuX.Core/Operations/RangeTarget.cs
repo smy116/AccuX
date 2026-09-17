@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace AccuX.Core.Operations
 {
@@ -33,6 +35,38 @@ namespace AccuX.Core.Operations
             IsMultiArea = isMultiArea;
             ContainsMergedCells = containsMergedCells;
             IdentityToken = identityToken ?? string.Empty;
+            Areas = Array.AsReadOnly(new[] { new RangeArea(address, rowCount, columnCount) });
+        }
+
+        public RangeTarget(string workbookKey, string worksheetKey, string worksheetName,
+            IReadOnlyList<RangeArea> areas, bool containsMergedCells, string identityToken = null)
+        {
+            if (areas == null) throw new ArgumentNullException(nameof(areas));
+            if (areas.Count == 0 || areas.Any(area => area == null))
+                throw new ArgumentException("选区必须包含有效区域。", nameof(areas));
+            WorkbookKey = workbookKey ?? throw new ArgumentNullException(nameof(workbookKey));
+            WorksheetKey = worksheetKey ?? throw new ArgumentNullException(nameof(worksheetKey));
+            WorksheetName = worksheetName ?? string.Empty;
+            Areas = Array.AsReadOnly(areas.ToArray());
+            Address = string.Join(",", Areas.Select(area => area.Address));
+            CellCount = Areas.Sum(area => area.CellCount);
+            IsMultiArea = Areas.Count > 1;
+            RowCount = IsMultiArea ? 0 : Areas[0].RowCount;
+            ColumnCount = IsMultiArea ? 0 : Areas[0].ColumnCount;
+            ContainsMergedCells = containsMergedCells;
+            IdentityToken = identityToken ?? string.Empty;
+        }
+
+        public IReadOnlyList<RangeArea> Areas { get; }
+
+        public RangeTarget GetAreaTarget(int areaIndex)
+        {
+            if (IsMultiArea && Areas.Count == 1)
+                throw new InvalidOperationException("多区域目标缺少区域明细。");
+            var area = Areas[areaIndex];
+            return new RangeTarget(WorkbookKey, WorksheetKey, WorksheetName,
+                area.Address, area.RowCount, area.ColumnCount, area.CellCount,
+                false, ContainsMergedCells, IdentityToken);
         }
 
         /// <summary>由 Host 生成和解释的稳定 Workbook 身份信息。</summary>
@@ -47,8 +81,10 @@ namespace AccuX.Core.Operations
         /// <summary>选区地址，例如 A1:C10。</summary>
         public string Address { get; }
 
+        /// <summary>单区域行数；多区域为 0，应读取 Areas 中各区域的尺寸。</summary>
         public int RowCount { get; }
 
+        /// <summary>单区域列数；多区域为 0，应读取 Areas 中各区域的尺寸。</summary>
         public int ColumnCount { get; }
 
         public long CellCount { get; }

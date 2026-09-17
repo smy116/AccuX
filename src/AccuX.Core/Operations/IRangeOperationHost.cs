@@ -44,7 +44,7 @@ namespace AccuX.Core.Operations
         IHostStateScope BeginStateScope(HostStateOptions options);
 
         /// <summary>
-        /// 读取 RangeTarget 的 NumberFormat（用于金额折合等需要保持格式的场景）。
+        /// 读取单区域 RangeTarget 的 NumberFormat；多区域使用带 areaIndex 的扩展重载。
         /// </summary>
         string[,] ReadNumberFormats(RangeTarget target);
 
@@ -52,6 +52,16 @@ namespace AccuX.Core.Operations
         /// 宿主上下文信息。
         /// </summary>
         IHostContext Context { get; }
+    }
+
+    public static class RangeOperationHostExtensions
+    {
+        public static string[,] ReadNumberFormats(this IRangeOperationHost host, RangeTarget target, int areaIndex)
+        {
+            if (host == null) throw new ArgumentNullException(nameof(host));
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            return host.ReadNumberFormats(target.GetAreaTarget(areaIndex));
+        }
     }
 
     /// <summary>

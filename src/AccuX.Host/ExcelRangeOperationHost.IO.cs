@@ -16,6 +16,18 @@ namespace AccuX.Host
         /// </summary>
         public RangeReadResult Read(RangeTarget target)
         {
+            EnsureAreaDetails(target);
+            var cells = new List<CellData>();
+            for (var i = 0; i < target.Areas.Count; i++)
+            {
+                cells.AddRange(ReadArea(target.GetAreaTarget(i), i).Cells);
+            }
+
+            return new RangeReadResult(target, cells);
+        }
+
+        private RangeReadResult ReadArea(RangeTarget target, int areaIndex)
+        {
             var worksheet = ResolveWorksheetOrThrow(target);
             var workbook = ResolveWorkbook(target);
             var isDate1904 = false;
@@ -69,7 +81,7 @@ namespace AccuX.Host
                     var hasFormula = formulaMask[row, column];
                     var rawFormula = hasFormula ? formulas[row, column]?.ToString() : null;
                     var numberFormat = formats[row, column];
-                    var cell = new CellData(row, column)
+                    var cell = new CellData(row, column, areaIndex)
                     {
                         NumberFormat = numberFormat,
                         IsMerged = merged[row, column],
@@ -135,6 +147,74 @@ namespace AccuX.Host
         /// 数值与公式分别整块写入，禁止逐 Cell 写入。
         /// </summary>
         public void Write(RangeTarget target, RangeWritePlan writePlan)
+        {
+            var plans = SplitWritePlan(target, writePlan);
+            var check = ValidateWrite(target, writePlan);
+            if (!check.CanWrite)
+            {
+                throw new HostOperationException(string.Join("；", check.Issues));
+            }
+
+            for (var i = 0; i < plans.Length; i++)
+            {
+                WriteArea(target.GetAreaTarget(i), plans[i]);
+            }
+        }
+
+        private static void EnsureAreaDetails(RangeTarget target)
+        {
+            if (target == null || target.Areas.Count == 0
+                || (target.IsMultiArea && target.Areas.Count == 1))
+            {
+                throw new HostOperationException("选区缺少有效的区域信息，请重新选择。");
+            }
+        }
+
+        private static RangeWritePlan[] SplitWritePlan(RangeTarget target, RangeWritePlan writePlan)
+        {
+            EnsureAreaDetails(target);
+            if (writePlan != null && !ReferenceEquals(writePlan.Target, target))
+            {
+                throw new HostOperationException("写入计划与操作目标不一致。");
+            }
+
+            var plans = new RangeWritePlan[target.Areas.Count];
+            for (var i = 0; i < plans.Length; i++)
+            {
+                plans[i] = new RangeWritePlan(target.GetAreaTarget(i));
+            }
+
+            if (writePlan != null)
+            {
+                foreach (var write in writePlan.Writes)
+                {
+                    if (write.AreaIndex < 0 || write.AreaIndex >= plans.Length)
+                    {
+                        throw new HostOperationException("写入区域编号无效。");
+                    }
+
+                    var area = target.Areas[write.AreaIndex];
+                    if (!IsInside(write.Row, write.Column, area.RowCount, area.ColumnCount))
+                    {
+                        throw new HostOperationException("待写单元格超出选区范围。");
+                    }
+
+                    var plan = plans[write.AreaIndex];
+                    if (write.IsFormulaWrite)
+                    {
+                        plan.AddFormula(write.Row, write.Column, write.Formula);
+                    }
+                    else
+                    {
+                        plan.AddValue(write.Row, write.Column, write.Value, write.NumberFormat);
+                    }
+                }
+            }
+
+            return plans;
+        }
+
+        private void WriteArea(RangeTarget target, RangeWritePlan writePlan)
         {
             if (writePlan == null || writePlan.IsEmpty)
             {

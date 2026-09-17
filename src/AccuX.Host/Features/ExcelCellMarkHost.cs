@@ -27,48 +27,52 @@ namespace AccuX.Host.Features
             }
 
             var oleColor = ExcelComHelper.ParseOleColor(hexColor);
-            if (target.IsMultiArea || target.RowCount <= 0 || target.ColumnCount <= 0)
+            if (target.Areas.Count == 0 || (target.IsMultiArea && target.Areas.Count == 1))
             {
-                throw new HostOperationException("当前选区不是有效的连续单元格区域，请重新选择后重试。");
+                throw new HostOperationException("选区缺少有效的区域信息，请重新选择。");
             }
 
             var worksheet = ResolveWorksheetOrThrow(target);
-            Excel.Range range;
-            try
-            {
-                range = worksheet.Range[target.Address];
-            }
-            catch (Exception ex)
-            {
-                throw new HostOperationException("无法解析原选区地址：" + ex.Message, ex);
-            }
-
-            if (range == null || SafeAreaCount(range) > 1)
-            {
-                throw new HostOperationException("原选区地址已失效，请重新执行。");
-            }
-
-            if (SafeRowCount(range) != target.RowCount || SafeColumnCount(range) != target.ColumnCount)
-            {
-                throw new HostOperationException("原选区大小已发生变化，请重新选择后重试。");
-            }
-
             if (IsSheetProtected(worksheet))
             {
                 throw new HostOperationException("目标工作表处于保护状态，无法标记底色。请先取消保护。");
             }
 
-            // 与范围读取共用经过兼容性处理的行列隐藏状态读取逻辑。
-            var hiddenRows = ReadHiddenRows(worksheet, range, target.RowCount);
-            var hiddenColumns = ReadHiddenColumns(worksheet, range, target.ColumnCount);
-            var visibleCellCount = CountVisibleCells(hiddenRows, hiddenColumns);
-            if (visibleCellCount == 0)
+            long visibleCellCount = 0;
+            var visibleRanges = new List<Excel.Range>();
+            // 所有区域完成解析和校验之后才能开始着色。
+            foreach (var area in target.Areas)
             {
-                return 0;
+                Excel.Range range;
+                try
+                {
+                    range = worksheet.Range[area.Address];
+                    if (range == null || range.Areas.Count != 1
+                        || range.Rows.Count != area.RowCount || range.Columns.Count != area.ColumnCount)
+                    {
+                        throw new HostOperationException("原选区地址或大小已发生变化，请重新选择后重试。");
+                    }
+
+                    if (!(range.MergeCells is bool merged) || merged)
+                    {
+                        throw new HostOperationException("选区包含合并单元格，无法标记底色。");
+                    }
+                }
+                catch (HostOperationException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    throw new HostOperationException("无法解析原选区地址：" + ex.Message, ex);
+                }
+
+                var hiddenRows = ReadHiddenRows(worksheet, range, area.RowCount);
+                var hiddenColumns = ReadHiddenColumns(worksheet, range, area.ColumnCount);
+                visibleCellCount += CountVisibleCells(hiddenRows, hiddenColumns);
+                visibleRanges.AddRange(BuildVisibleRanges(range, hiddenRows, hiddenColumns));
             }
 
-            // 先解析出所有待写的连续区域，再开始修改，尽量遵守 fail-before-write。
-            var visibleRanges = BuildVisibleRanges(range, hiddenRows, hiddenColumns);
             try
             {
                 foreach (var visibleRange in visibleRanges)

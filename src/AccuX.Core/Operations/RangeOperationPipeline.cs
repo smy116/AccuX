@@ -128,12 +128,12 @@ namespace AccuX.Core.Operations
 
                     if (outcome.IsFormulaWrite)
                     {
-                        writePlan.AddFormula(cell.Row, cell.Column, outcome.Formula);
+                        writePlan.AddFormula(cell.Row, cell.Column, outcome.Formula, cell.AreaIndex);
                         stats.FormulaWrites++;
                     }
                     else
                     {
-                        writePlan.AddValue(cell.Row, cell.Column, outcome.Value, outcome.NumberFormat);
+                        writePlan.AddValue(cell.Row, cell.Column, outcome.Value, outcome.NumberFormat, cell.AreaIndex);
                         stats.ValueWrites++;
                     }
 
